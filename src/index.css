@@ -1,0 +1,155 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* Token warna tambahan khusus aplikasi (di luar token shadcn) */
+@theme {
+  --color-brand-50: #f0fdf4;
+  --color-brand-100: #dcfce7;
+  --color-brand-200: #bbf7d0;
+  --color-brand-400: #4ade80;
+  --color-brand-500: #22c55e;
+  --color-brand-600: #16a34a;
+  --color-brand-700: #15803d;
+  --color-income: #16a34a;
+  --color-expense: #ef4444;
+  --shadow-card: 0 4px 24px -8px rgb(22 101 52 / 0.15);
+}
+
+@theme inline {
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Tema hijau mengikuti desain Wahduid */
+:root {
+  --background: #f5f8f6;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #16a34a;
+  --primary-foreground: #ffffff;
+  --secondary: #dcfce7;
+  --secondary-foreground: #15803d;
+  --muted: #eef2ef;
+  --muted-foreground: #64748b;
+  --accent: #f0fdf4;
+  --accent-foreground: #15803d;
+  --destructive: #ef4444;
+  --border: #e3e8e5;
+  --input: #dfe5e1;
+  --ring: #22c55e;
+  --chart-1: #16a34a;
+  --chart-2: #ef4444;
+  --chart-3: #f97316;
+  --chart-4: #3b82f6;
+  --chart-5: #8b5cf6;
+  --radius: 0.875rem;
+}
+
+.dark {
+  --background: #0b1210;
+  --foreground: #f1f5f9;
+  --card: #131c19;
+  --card-foreground: #f1f5f9;
+  --popover: #131c19;
+  --popover-foreground: #f1f5f9;
+  --primary: #22c55e;
+  --primary-foreground: #052e16;
+  --secondary: #14532d;
+  --secondary-foreground: #bbf7d0;
+  --muted: #1c2622;
+  --muted-foreground: #94a3b8;
+  --accent: #1c2622;
+  --accent-foreground: #bbf7d0;
+  --destructive: #f87171;
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 15%);
+  --ring: #22c55e;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Area aman untuk perangkat dengan notch / home indicator */
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top), 1rem);
+}
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+}
+
+.hero-gradient {
+  background: linear-gradient(180deg, #16a34a 0%, #22c55e 45%, #bbf7d0 80%, var(--background) 100%);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Saat berjalan sebagai aplikasi terinstal, cegah seleksi teks tidak sengaja pada elemen UI */
+@media (display-mode: standalone) {
+  button,
+  a,
+  nav {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
