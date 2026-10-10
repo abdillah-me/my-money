@@ -125,12 +125,24 @@
   }
 }
 
-/* Area aman untuk perangkat dengan notch / home indicator */
+/*
+ * Area aman untuk notch / Dynamic Island / home indicator.
+ * Diberi jarak tambahan agar konten tidak menempel tepat di bawah Dynamic Island.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
 .pt-safe {
-  padding-top: max(env(safe-area-inset-top), 1rem);
+  padding-top: max(calc(var(--safe-top) + 0.5rem), 1rem);
 }
 .pb-safe {
-  padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+  padding-bottom: max(calc(var(--safe-bottom) + 0.25rem), 0.75rem);
+}
+/* Mode landscape di iPhone: hindari konten tertutup notch di kiri/kanan */
+#root {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .hero-gradient {
@@ -139,6 +151,34 @@
 /* Mode gelap: gradasi lebih redup tanpa pita hijau muda */
 .dark .hero-gradient {
   background: linear-gradient(180deg, #15803d 0%, #166534 50%, #0f2a1c 80%, var(--background) 100%);
+}
+
+/*
+ * Normalisasi input waktu native.
+ * Safari iOS memberi lebar minimum & rata tengah pada input time, sehingga meluber dari kolom grid.
+ */
+.time-input {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  line-height: 2.75rem;
+}
+.time-input::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+/* Chrome/Edge: ikon picker bawaan disembunyikan, area klik diperluas ke seluruh input */
+.time-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  opacity: 0;
+  cursor: pointer;
+}
+.dark .time-input {
+  color-scheme: dark;
 }
 
 .no-scrollbar {

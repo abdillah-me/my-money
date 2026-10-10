@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/confirm'
+import DateField from '@/components/DateField'
 import MoneyInput from '@/components/MoneyInput'
 import PageHeader from '@/components/PageHeader'
 import Segmented from '@/components/Segmented'
@@ -14,7 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { compact, db, type SplitBill } from '@/db/db'
-import { formatDate, fractionDigits, fromInputs, toDateInput } from '@/lib/format'
+import { formatDate, fractionDigits } from '@/lib/format'
 import { useGoBack } from '@/lib/nav'
 import { useSettings } from '@/lib/settings'
 import { computeSplit, uid } from '@/lib/split'
@@ -230,7 +231,7 @@ export default function SplitBillForm() {
       />
 
       <form onSubmit={submit} noValidate className="space-y-5 px-5 pb-10">
-        <div className="grid grid-cols-[1fr_9.5rem] gap-3">
+        <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3">
           <Field id="sb-title" label={t('split.billTitle')}>
             <Input
               id="sb-title"
@@ -242,12 +243,7 @@ export default function SplitBillForm() {
             />
           </Field>
           <Field id="sb-date" label={t('tx.date')}>
-            <Input
-              id="sb-date"
-              type="date"
-              value={toDateInput(draft.date)}
-              onChange={(e) => e.target.value && set({ date: fromInputs(e.target.value, '12:00') })}
-            />
+            <DateField id="sb-date" value={draft.date} onChange={(date) => set({ date })} />
           </Field>
         </div>
 

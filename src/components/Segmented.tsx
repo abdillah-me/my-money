@@ -33,11 +33,12 @@ export default function Segmented<T extends string>({ value, onValueChange, opti
           key={o.value}
           value={o.value}
           className={cn(
-            'h-9 rounded-full font-semibold text-muted-foreground hover:bg-transparent data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm',
+            // min-w-0 + truncate: label panjang tidak meluber di layar sempit (mis. 320px)
+            'h-9 min-w-0 shrink rounded-full px-1.5 text-xs font-semibold text-muted-foreground hover:bg-transparent min-[360px]:px-2 min-[360px]:text-[13px] min-[400px]:text-sm data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm [&>span]:truncate',
             o.activeClassName,
           )}
         >
-          {o.label}
+          <span>{o.label}</span>
         </ToggleGroupItem>
       ))}
     </ToggleGroup>

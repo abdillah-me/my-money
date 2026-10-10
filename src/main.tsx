@@ -21,7 +21,16 @@ createRoot(document.getElementById('root')!).render(
         <MonthProvider>
           <ConfirmProvider>
             <App />
-            <Toaster position="top-center" richColors />
+            {/*
+              Toast di bawah, tepat di atas bottom navigation, agar tidak menutupi header
+              maupun Dynamic Island / notch. Offset ikut safe area home indicator.
+            */}
+            <Toaster
+              position="bottom-center"
+              richColors
+              offset={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)' }}
+              mobileOffset={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)', left: '12px', right: '12px' }}
+            />
           </ConfirmProvider>
         </MonthProvider>
       </SettingsProvider>

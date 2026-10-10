@@ -5,7 +5,8 @@ import { toast } from 'sonner'
 import CategoryDialog from '@/components/CategoryDialog'
 import CategoryIcon from '@/components/CategoryIcon'
 import { useConfirm } from '@/components/confirm'
-import DateField from '@/components/DateField'
+import DateField, { DateQuickChips } from '@/components/DateField'
+import TimeField from '@/components/TimeField'
 import MoneyInput from '@/components/MoneyInput'
 import PageHeader from '@/components/PageHeader'
 import Segmented from '@/components/Segmented'
@@ -17,7 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { compact, compactPatch, db, type Frequency, type TxType } from '@/db/db'
 import { useCategories, useCategoryName, useWallets } from '@/db/hooks'
-import { fractionDigits, formatCompact, toTimeInput } from '@/lib/format'
+import { fractionDigits, formatCompact } from '@/lib/format'
 import { useGoBack } from '@/lib/nav'
 import { useSettings } from '@/lib/settings'
 import { cn } from '@/lib/utils'
@@ -89,13 +90,6 @@ export default function TransactionForm() {
     setErrors({})
     if (next === 'transfer') return setCategoryId(undefined)
     if (categories.find((c) => c.id === categoryId)?.type !== next) setCategoryId(settings.lastCategory[next])
-  }
-
-  const setTime = (hhmm: string) => {
-    const [h, m] = hhmm.split(':').map(Number)
-    const d = new Date(date)
-    d.setHours(h || 0, m || 0, 0, 0)
-    setDate(d.getTime())
   }
 
   const submit = async (e: FormEvent) => {
@@ -263,7 +257,7 @@ export default function TransactionForm() {
           {!isTransfer && (
             <fieldset>
               <legend className="mb-2 text-sm font-medium">{t('tx.category')}</legend>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2 min-[380px]:grid-cols-4">
                 {options.map((c) => {
                   const active = c.id === categoryId
                   return (
@@ -301,15 +295,19 @@ export default function TransactionForm() {
             </fieldset>
           )}
 
-          <div className="grid grid-cols-[1fr_7rem] gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="tx-date">{t('tx.date')}</Label>
-              <DateField id="tx-date" value={date} onChange={setDate} quick />
+          <div className="space-y-2">
+            {/* minmax(0, …) wajib agar kolom boleh menyempit (default grid item = min-content) */}
+            <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-3">
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="tx-date">{t('tx.date')}</Label>
+                <DateField id="tx-date" value={date} onChange={setDate} />
+              </div>
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="tx-time">{t('tx.time')}</Label>
+                <TimeField id="tx-time" value={date} onChange={setDate} />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tx-time">{t('tx.time')}</Label>
-              <Input id="tx-time" type="time" value={toTimeInput(date)} onChange={(e) => setTime(e.target.value)} />
-            </div>
+            <DateQuickChips value={date} onChange={setDate} />
           </div>
 
           <div className="space-y-1.5">
