@@ -275,6 +275,12 @@ const id = {
   'storage.used': '{size} terpakai',
   'storage.persisted': 'Penyimpanan permanen aktif: browser tidak akan menghapus data otomatis.',
   'storage.notPersisted': 'Browser belum memberi izin penyimpanan permanen. Rutin ekspor backup.',
+  'nav.addShort': 'Tambah',
+  'textSize.title': 'Ukuran teks',
+  'textSize.normal': 'Normal',
+  'textSize.large': 'Besar',
+  'textSize.xlarge': 'Sangat besar',
+  'textSize.preview': 'Semua teks dan tombol ikut membesar agar lebih mudah dibaca.',
 }
 
 export type DictKey = keyof typeof id
@@ -554,6 +560,12 @@ const en: Record<DictKey, string> = {
   'storage.used': '{size} used',
   'storage.persisted': 'Persistent storage is on: the browser will not clear data automatically.',
   'storage.notPersisted': 'The browser has not granted persistent storage. Export backups regularly.',
+  'nav.addShort': 'Add',
+  'textSize.title': 'Text size',
+  'textSize.normal': 'Normal',
+  'textSize.large': 'Large',
+  'textSize.xlarge': 'Extra large',
+  'textSize.preview': 'All text and buttons scale up for easier reading.',
 }
 
 export const dictionaries: Record<Lang, Record<DictKey, string>> = { id, en }

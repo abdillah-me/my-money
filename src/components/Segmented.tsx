@@ -26,15 +26,17 @@ export default function Segmented<T extends string>({ value, onValueChange, opti
       onValueChange={(v) => v && onValueChange(v as T)}
       aria-label={label}
       spacing={1}
-      className={cn('grid w-full auto-cols-fr grid-flow-col rounded-full bg-muted p-1', className)}
+      className={cn('@container grid w-full auto-cols-fr grid-flow-col rounded-[1.5rem] bg-muted p-1', className)}
     >
       {options.map((o) => (
         <ToggleGroupItem
           key={o.value}
           value={o.value}
           className={cn(
-            // min-w-0 + truncate: label panjang tidak meluber di layar sempit (mis. 320px)
-            'h-9 min-w-0 shrink rounded-full px-1.5 text-xs font-semibold text-muted-foreground hover:bg-transparent min-[360px]:px-2 min-[360px]:text-[13px] min-[400px]:text-sm data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm [&>span]:truncate',
+            // Label boleh turun ke 2 baris (bukan dipotong "…") saat teks diperbesar / layar sempit
+            // Ukuran label mengikuti lebar kontrol (container query): kata panjang seperti "Pengeluaran"
+            // tetap muat utuh walau teks diperbesar atau layar sempit
+            'h-auto min-h-10 min-w-0 shrink rounded-[1.25rem] px-1 py-1.5 text-center text-[min(0.875rem,4.3cqw)] leading-tight font-semibold whitespace-nowrap text-muted-foreground transition-all duration-200 hover:bg-transparent data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-sm',
             o.activeClassName,
           )}
         >

@@ -116,8 +116,8 @@ export default function Transactions() {
           <section key={day} className="mb-3">
             <h2 className="px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{day}</h2>
             <ul>
-              {list.map((tx) => (
-                <TransactionItem key={tx.id} tx={tx} category={categoryMap.get(tx.categoryId)} />
+              {list.map((tx, i) => (
+                <TransactionItem key={tx.id} tx={tx} category={categoryMap.get(tx.categoryId)} index={i} />
               ))}
             </ul>
           </section>

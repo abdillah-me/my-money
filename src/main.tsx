@@ -28,8 +28,8 @@ createRoot(document.getElementById('root')!).render(
             <Toaster
               position="bottom-center"
               richColors
-              offset={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)' }}
-              mobileOffset={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)', left: '12px', right: '12px' }}
+              offset={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 104px)' }}
+              mobileOffset={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 104px)', left: '12px', right: '12px' }}
             />
           </ConfirmProvider>
         </MonthProvider>

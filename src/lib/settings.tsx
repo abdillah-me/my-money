@@ -3,6 +3,10 @@ import { translate, type DictKey, type Lang } from './i18n'
 import { formatMoney, type Currency } from './format'
 
 export type Theme = 'light' | 'dark' | 'system'
+export type TextSize = 'normal' | 'large' | 'xlarge'
+
+/** Skala ukuran root font; semua ukuran Tailwind berbasis rem sehingga ikut membesar */
+const TEXT_SCALE: Record<TextSize, string> = { normal: '100%', large: '112.5%', xlarge: '125%' }
 
 export interface Settings {
   name: string
@@ -11,6 +15,8 @@ export interface Settings {
   onboarded: boolean
   hideBalance: boolean
   theme: Theme
+  /** Ukuran teks untuk keterbacaan (mis. pengguna lanjut usia) */
+  textSize: TextSize
   /** Kategori terakhir per tipe, dipilih otomatis di form transaksi */
   lastCategory: { income?: number; expense?: number }
   /** Dompet terakhir dipakai */
@@ -26,6 +32,7 @@ const defaults: Settings = {
   onboarded: false,
   hideBalance: false,
   theme: 'system',
+  textSize: 'normal',
   lastCategory: {},
 }
 
@@ -40,6 +47,7 @@ function load(): Settings {
       lang: parsed.lang === 'en' || parsed.lang === 'id' ? parsed.lang : defaults.lang,
       currency: parsed.currency === 'USD' || parsed.currency === 'IDR' ? parsed.currency : defaults.currency,
       theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
+      textSize: parsed.textSize === 'large' || parsed.textSize === 'xlarge' ? parsed.textSize : 'normal',
       lastCategory: parsed.lastCategory && typeof parsed.lastCategory === 'object' ? parsed.lastCategory : {},
     }
   } catch {
@@ -72,6 +80,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
     document.documentElement.lang = settings.lang
   }, [settings])
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = TEXT_SCALE[settings.textSize]
+  }, [settings.textSize])
 
   useEffect(() => {
     applyTheme(settings.theme)

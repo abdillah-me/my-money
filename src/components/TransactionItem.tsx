@@ -7,7 +7,7 @@ import { formatDate } from '@/lib/format'
 import { useSettings } from '@/lib/settings'
 import { cn } from '@/lib/utils'
 
-export default function TransactionItem({ tx, category }: { tx: Transaction; category?: Category }) {
+export default function TransactionItem({ tx, category, index = 0 }: { tx: Transaction; category?: Category; index?: number }) {
   const { settings, money } = useSettings()
   const catName = useCategoryName()
   const wallets = useWalletMap()
@@ -23,10 +23,10 @@ export default function TransactionItem({ tx, category }: { tx: Transaction; cat
   const walletLabel = !isTransfer && wallets.size > 1 ? walletName(wallets.get(tx.walletId)) : undefined
 
   return (
-    <li>
+    <li className="list-enter" style={{ '--i': index } as React.CSSProperties}>
       <Link
         to={`/transactions/${tx.id}`}
-        className="flex items-center gap-3 rounded-2xl px-2 py-2.5 transition-colors hover:bg-card focus-visible:bg-card"
+        className="pressable flex min-h-16 items-center gap-3 rounded-2xl px-2 py-2.5 hover:bg-card focus-visible:bg-card"
       >
         {isTransfer ? (
           <span className="grid size-11 shrink-0 place-items-center rounded-full bg-secondary text-primary" aria-hidden>

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useSettings } from './lib/settings'
 import { runRecurring } from './lib/recurring'
@@ -24,6 +24,16 @@ const Notes = lazy(() => import('./pages/Notes'))
 const NoteForm = lazy(() => import('./pages/NoteForm'))
 const Debts = lazy(() => import('./pages/Debts'))
 const Recurring = lazy(() => import('./pages/Recurring'))
+
+/** Pembungkus halaman non-tab: animasi masuk diputar ulang tiap pindah halaman */
+function PageShell() {
+  const { pathname } = useLocation()
+  return (
+    <div key={pathname} className="page-enter">
+      <Outlet />
+    </div>
+  )
+}
 
 /** Buat transaksi berulang yang jatuh tempo saat aplikasi dibuka / kembali aktif */
 function useRecurringRunner(enabled: boolean) {
@@ -61,18 +71,21 @@ export default function App() {
                 <Route path="wallets" element={<Wallets />} />
                 <Route path="profile" element={<Profile />} />
               </Route>
-              <Route path="transactions/new" element={<TransactionForm />} />
-              <Route path="transactions/:id" element={<TransactionForm />} />
-              <Route path="profile/categories" element={<Categories />} />
-              <Route path="budget" element={<Budget />} />
-              <Route path="debts" element={<Debts />} />
-              <Route path="recurring" element={<Recurring />} />
-              <Route path="split-bill" element={<SplitBills />} />
-              <Route path="split-bill/new" element={<SplitBillForm />} />
-              <Route path="split-bill/:id" element={<SplitBillForm />} />
-              <Route path="note" element={<Notes />} />
-              <Route path="note/new" element={<NoteForm />} />
-              <Route path="note/:id" element={<NoteForm />} />
+              {/* Halaman detail/form (tanpa bottom nav) juga mendapat animasi masuk */}
+              <Route element={<PageShell />}>
+                <Route path="transactions/new" element={<TransactionForm />} />
+                <Route path="transactions/:id" element={<TransactionForm />} />
+                <Route path="profile/categories" element={<Categories />} />
+                <Route path="budget" element={<Budget />} />
+                <Route path="debts" element={<Debts />} />
+                <Route path="recurring" element={<Recurring />} />
+                <Route path="split-bill" element={<SplitBills />} />
+                <Route path="split-bill/new" element={<SplitBillForm />} />
+                <Route path="split-bill/:id" element={<SplitBillForm />} />
+                <Route path="note" element={<Notes />} />
+                <Route path="note/new" element={<NoteForm />} />
+                <Route path="note/:id" element={<NoteForm />} />
+              </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

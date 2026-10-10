@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/confirm'
+import AnimatedMoney from '@/components/AnimatedMoney'
 import PageHeader from '@/components/PageHeader'
 import WalletDialog from '@/components/WalletDialog'
 import { Button } from '@/components/ui/button'
@@ -47,10 +48,10 @@ export default function Wallets() {
     toast.success(t('common.deleted'))
   }
 
-  const row = (w: Wallet) => {
+  const row = (w: Wallet, i: number) => {
     const balance = byWallet.get(w.id!) ?? 0
     return (
-      <li key={w.id} className="flex items-center gap-3 px-4 py-3">
+      <li key={w.id} className="list-enter flex min-h-16 items-center gap-3 px-4 py-3" style={{ '--i': i } as React.CSSProperties}>
         <span className="grid size-11 shrink-0 place-items-center rounded-full text-xl" style={{ backgroundColor: `${w.color}22` }} aria-hidden>
           {w.icon}
         </span>
@@ -93,7 +94,7 @@ export default function Wallets() {
       <div className="space-y-4 px-5">
         <Card className="hero-gradient gap-1 rounded-3xl border-0 px-5 py-5 text-white shadow-card ring-0">
           <p className="text-sm text-white/90">{t('home.totalBalance')}</p>
-          <p className="text-3xl font-bold tracking-tight">{mask(money(total))}</p>
+          <AnimatedMoney value={total} masked={settings.hideBalance} className="block truncate text-3xl font-bold tracking-tight" />
           <Button asChild variant="secondary" size="sm" className="mt-3 w-fit rounded-full bg-white/90 text-primary hover:bg-white">
             <Link to="/transactions/new?type=transfer">
               <ArrowLeftRight data-icon="inline-start" aria-hidden />

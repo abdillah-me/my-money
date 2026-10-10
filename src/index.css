@@ -161,12 +161,25 @@
   -webkit-appearance: none;
   appearance: none;
   display: block;
+  box-sizing: border-box;
   min-width: 0;
+  max-width: 100%;
+  /* iOS mengabaikan `height` pada input waktu; kunci tinggi lewat min/max agar sama dengan tombol tanggal */
+  height: 2.75rem;
+  min-height: 2.75rem;
+  max-height: 2.75rem;
+  padding-top: 0;
+  padding-bottom: 0;
   line-height: 2.75rem;
 }
 .time-input::-webkit-date-and-time-value {
   text-align: left;
   margin: 0;
+  /* Cegah nilai kosong membuat input mengecil di iOS */
+  min-height: 1.5em;
+}
+.time-input::-webkit-datetime-edit {
+  padding: 0;
 }
 /* Chrome/Edge: ikon picker bawaan disembunyikan, area klik diperluas ke seluruh input */
 .time-input::-webkit-calendar-picker-indicator {
@@ -186,6 +199,83 @@
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Animasi                                                              */
+/* Catatan: tanpa `fill-mode: forwards` pada transform agar elemen      */
+/* `position: fixed` di dalam halaman tidak ikut bergeser setelahnya.   */
+/* ------------------------------------------------------------------ */
+:root {
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes list-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Transisi masuk halaman */
+.page-enter {
+  animation: page-in 320ms var(--ease-out);
+}
+/* Item daftar muncul bertahap; jeda diatur lewat --i (indeks item) */
+.list-enter {
+  animation: list-in 360ms var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 10) * 35ms);
+}
+.pop-enter {
+  animation: pop-in 380ms var(--ease-spring) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+/* Placeholder saat data sedang dimuat */
+.skeleton {
+  border-radius: 0.75rem;
+  background: linear-gradient(90deg, var(--muted) 25%, color-mix(in oklab, var(--muted), var(--card) 60%) 50%, var(--muted) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* Umpan balik sentuh untuk elemen yang bisa ditekan */
+.pressable {
+  transition: transform 160ms var(--ease-out), background-color 160ms, box-shadow 160ms;
+}
+.pressable:active {
+  transform: scale(0.96);
+}
+
+/* Hormati pengaturan "Kurangi gerakan" di perangkat */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Saat berjalan sebagai aplikasi terinstal, cegah seleksi teks tidak sengaja pada elemen UI */

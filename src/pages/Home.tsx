@@ -1,7 +1,9 @@
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Eye, EyeOff, HandCoins, Repeat, StickyNote, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import BudgetBar from '@/components/BudgetBar'
+import AnimatedMoney from '@/components/AnimatedMoney'
 import InstallBanner from '@/components/InstallBanner'
+import ListSkeleton from '@/components/ListSkeleton'
 import MonthPicker from '@/components/MonthPicker'
 import TransactionItem from '@/components/TransactionItem'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -68,14 +70,18 @@ export default function Home() {
 
         <p className="mt-6 text-sm text-white/90">{t('home.totalBalance')}</p>
         <div className="flex items-center gap-2 text-white">
-          <p className="text-3xl font-bold tracking-tight">{mask(money(balance))}</p>
+          <AnimatedMoney
+            value={balance}
+            masked={hidden}
+            className="min-w-0 font-bold tracking-tight whitespace-nowrap text-[min(1.875rem,8.5vw)]"
+          />
           <Button
             variant="ghost"
             size="icon"
             onClick={() => update({ hideBalance: !hidden })}
             aria-label={hidden ? t('common.showBalance') : t('common.hideBalance')}
             aria-pressed={hidden}
-            className="size-8 bg-white/25 text-white hover:bg-white/35 hover:text-white"
+            className="size-10 shrink-0 bg-white/25 text-white hover:bg-white/35 hover:text-white"
           >
             {hidden ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
           </Button>
@@ -86,15 +92,20 @@ export default function Home() {
           <MonthPicker tone="light" />
         </div>
         <div className="mt-1 grid grid-cols-2 gap-3">
-          <SummaryCard kind="income" label={t('common.income')} value={mask(money(income))} />
-          <SummaryCard kind="expense" label={t('common.expense')} value={mask(money(expense))} />
+          <SummaryCard kind="income" label={t('common.income')} value={income} masked={hidden} index={0} />
+          <SummaryCard kind="expense" label={t('common.expense')} value={expense} masked={hidden} index={1} />
         </div>
       </section>
 
       <nav className="grid grid-cols-4 gap-2 px-5" aria-label="Menu">
-        {menus.map(({ to, label, Icon }) => (
-          <Link key={to} to={to} className="group flex flex-col items-center gap-1.5 rounded-2xl text-xs text-muted-foreground">
-            <span className="grid size-14 place-items-center rounded-full bg-card shadow-card transition-transform group-active:scale-95">
+        {menus.map(({ to, label, Icon }, i) => (
+          <Link
+            key={to}
+            to={to}
+            className="pop-enter group flex flex-col items-center gap-1.5 rounded-2xl py-1 text-xs font-medium text-muted-foreground"
+            style={{ '--i': i + 2 } as React.CSSProperties}
+          >
+            <span className="grid size-15 place-items-center rounded-full bg-card shadow-card transition-transform duration-200 group-active:scale-90">
               <span className="grid size-9 place-items-center rounded-full bg-secondary text-primary">
                 <Icon className="size-5" aria-hidden />
               </span>
@@ -146,7 +157,9 @@ export default function Home() {
             <Link to="/transactions">{t('common.seeAll')}</Link>
           </Button>
         </div>
-        {txs && txs.length === 0 ? (
+        {txs === undefined ? (
+          <ListSkeleton rows={4} />
+        ) : txs.length === 0 ? (
           <div className="mt-6 flex flex-col items-center gap-3 text-center text-sm text-muted-foreground">
             <p>{t('home.empty')}</p>
             <Button asChild className="rounded-full">
@@ -155,8 +168,8 @@ export default function Home() {
           </div>
         ) : (
           <ul className="mt-1">
-            {txs?.slice(0, 6).map((tx) => (
-              <TransactionItem key={tx.id} tx={tx} category={categories.get(tx.categoryId)} />
+            {txs.slice(0, 6).map((tx, i) => (
+              <TransactionItem key={tx.id} tx={tx} category={categories.get(tx.categoryId)} index={i} />
             ))}
           </ul>
         )}
@@ -165,10 +178,22 @@ export default function Home() {
   )
 }
 
-function SummaryCard({ kind, label, value }: { kind: 'income' | 'expense'; label: string; value: string }) {
+function SummaryCard({
+  kind,
+  label,
+  value,
+  masked,
+  index,
+}: {
+  kind: 'income' | 'expense'
+  label: string
+  value: number
+  masked: boolean
+  index: number
+}) {
   const Icon = kind === 'income' ? ArrowDownLeft : ArrowUpRight
   return (
-    <Card className="gap-0 rounded-3xl px-4 shadow-card ring-0">
+    <Card className="pop-enter @container gap-0 rounded-3xl px-4 shadow-card ring-0" style={{ '--i': index } as React.CSSProperties}>
       <span
         className={cn(
           'grid size-9 place-items-center rounded-full',
@@ -179,7 +204,12 @@ function SummaryCard({ kind, label, value }: { kind: 'income' | 'expense'; label
         <Icon className="size-5" />
       </span>
       <p className="mt-3 text-xs text-muted-foreground">{label}</p>
-      <p className="truncate text-lg font-semibold">{value}</p>
+      {/* Ukuran angka menyesuaikan lebar kartu (container query) agar nominal tidak pernah terpotong */}
+      <AnimatedMoney
+        value={value}
+        masked={masked}
+        className="block font-semibold whitespace-nowrap text-[clamp(0.8125rem,11cqw,1.125rem)] leading-tight"
+      />
     </Card>
   )
 }

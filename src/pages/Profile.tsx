@@ -31,7 +31,7 @@ import { CURRENCIES, toDateInput, toTimeInput, type Currency } from '@/lib/forma
 import type { Lang } from '@/lib/i18n'
 import { hasPin } from '@/lib/lock'
 import { useInstallPrompt } from '@/lib/pwa'
-import { useSettings, type Theme } from '@/lib/settings'
+import { useSettings, type TextSize, type Theme } from '@/lib/settings'
 import { cn } from '@/lib/utils'
 
 function download(filename: string, content: string, mime: string) {
@@ -178,6 +178,18 @@ export default function Profile() {
                 { value: 'system', label: t('theme.system') },
               ]}
             />
+            <Label className="mt-3">{t('textSize.title')}</Label>
+            <Segmented<TextSize>
+              label={t('textSize.title')}
+              value={settings.textSize}
+              onValueChange={(textSize) => update({ textSize })}
+              options={[
+                { value: 'normal', label: t('textSize.normal') },
+                { value: 'large', label: t('textSize.large') },
+                { value: 'xlarge', label: t('textSize.xlarge') },
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">{t('textSize.preview')}</p>
           </Card>
         </Section>
 

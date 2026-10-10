@@ -1,6 +1,7 @@
 import { FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts'
+import AnimatedMoney from '@/components/AnimatedMoney'
 import MonthPicker from '@/components/MonthPicker'
 import PageHeader from '@/components/PageHeader'
 import TransactionItem from '@/components/TransactionItem'
@@ -54,7 +55,7 @@ export default function Analyze() {
           <MonthPicker />
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{t('analyze.net')}</p>
-        <p className={cn('text-3xl font-bold', net < 0 && 'text-expense')}>{money(net)}</p>
+        <AnimatedMoney value={net} className={cn('block text-3xl font-bold', net < 0 && 'text-expense')} />
 
         <div
           className="relative mt-4 h-64"
@@ -95,8 +96,8 @@ export default function Analyze() {
           </Button>
         </div>
         <ul className="mt-1">
-          {txs?.slice(0, 5).map((tx) => (
-            <TransactionItem key={tx.id} tx={tx} category={categories.get(tx.categoryId)} />
+          {txs?.slice(0, 5).map((tx, i) => (
+            <TransactionItem key={tx.id} tx={tx} category={categories.get(tx.categoryId)} index={i} />
           ))}
         </ul>
       </section>
