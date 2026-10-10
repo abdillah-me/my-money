@@ -4,10 +4,10 @@ import { useSettings } from '@/lib/settings'
 
 interface Props {
   id?: string
-  value?: number
-  onChange: (id: number) => void
+  value?: string
+  onChange: (id: string) => void
   /** Sembunyikan dompet ini (mis. dompet asal saat memilih tujuan transfer) */
-  exclude?: number
+  exclude?: string
   placeholder?: string
   invalid?: boolean
 }
@@ -22,16 +22,16 @@ export default function WalletSelect({ id, value, onChange, exclude, placeholder
   const options = wallets.filter((w) => w.id !== exclude && (!w.archived || w.id === value))
 
   return (
-    <Select value={value !== undefined ? String(value) : undefined} onValueChange={(v) => onChange(Number(v))}>
+    <Select value={value} onValueChange={(v) => onChange(v)}>
       <SelectTrigger id={id} className="w-full" aria-invalid={invalid}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent position="popper">
         {options.map((w) => (
-          <SelectItem key={w.id} value={String(w.id)}>
+          <SelectItem key={w.id} value={w.id}>
             <span aria-hidden>{w.icon}</span>
             <span>{walletName(w)}</span>
-            <span className="ml-auto pl-2 text-xs text-muted-foreground">{money(byWallet.get(w.id!) ?? 0)}</span>
+            <span className="ml-auto pl-2 text-xs text-muted-foreground">{money(byWallet.get(w.id) ?? 0)}</span>
           </SelectItem>
         ))}
       </SelectContent>

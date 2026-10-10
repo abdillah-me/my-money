@@ -31,7 +31,7 @@ export default function Transactions() {
     const q = query.trim().toLowerCase()
     return (txs ?? []).filter((tx) => {
       if (type !== 'all' && tx.type !== type) return false
-      if (categoryId !== 'all' && tx.categoryId !== Number(categoryId)) return false
+      if (categoryId !== 'all' && tx.categoryId !== categoryId) return false
       if (!q) return true
       return (tx.note ?? '').toLowerCase().includes(q) || catName(categoryMap.get(tx.categoryId)).toLowerCase().includes(q)
     })

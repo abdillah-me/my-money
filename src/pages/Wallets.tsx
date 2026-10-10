@@ -9,7 +9,7 @@ import WalletDialog from '@/components/WalletDialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { db, type Wallet } from '@/db/db'
+import { db, patch, remove as removeRecord, type Wallet } from '@/db/db'
 import { useBalances, useDebts, useWalletName, useWallets } from '@/db/hooks'
 import { useSettings } from '@/lib/settings'
 import { cn } from '@/lib/utils'
@@ -35,16 +35,16 @@ export default function Wallets() {
 
   const toggleArchive = async (w: Wallet) => {
     if (!w.archived && active.length <= 1) return toast.error(t('wallet.lastOne'))
-    await db.wallets.update(w.id!, { archived: w.archived ? undefined : true })
+    await patch('wallets', w.id, { archived: w.archived ? undefined : true })
   }
 
   const remove = async (w: Wallet) => {
     // Dompet yang sudah punya transaksi diarsipkan saja agar riwayat & saldo tetap benar
-    const used = await db.transactions.filter((x) => x.walletId === w.id || x.toWalletId === w.id).count()
+    const used = await db.transactions.filter((x) => !x.deletedAt && (x.walletId === w.id || x.toWalletId === w.id)).count()
     if (used > 0) return toast.error(t('wallet.inUse', { n: used }))
     if (active.length <= 1 && !w.archived) return toast.error(t('wallet.lastOne'))
     if (!(await confirm({ title: t('wallet.deleteConfirm'), description: walletName(w), destructive: true }))) return
-    await db.wallets.delete(w.id!)
+    await removeRecord('wallets', w.id)
     toast.success(t('common.deleted'))
   }
 

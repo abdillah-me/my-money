@@ -1,4 +1,4 @@
-import { compact, db, type Frequency, type RecurringRule } from '@/db/db'
+import { compact, db, isAlive, recurringTxId, type Frequency, type RecurringRule, type Transaction } from '@/db/db'
 
 /** Batas pembuatan per aturan dalam satu kali jalan (mis. aturan harian yang lama tidak dibuka) */
 const MAX_PER_RUN = 400
@@ -32,17 +32,21 @@ export function nextDue(rule: Pick<RecurringRule, 'start' | 'freq' | 'n'>) {
 export async function runRecurring(now = Date.now()): Promise<number> {
   let created = 0
   await db.transaction('rw', db.recurring, db.transactions, async () => {
-    const rules = await db.recurring.toArray()
+    const rules = (await db.recurring.toArray()).filter(isAlive)
+    const ts = Date.now()
     for (const rule of rules) {
       if (rule.paused) continue
       let n = rule.n
-      const batch = []
+      const batch: Transaction[] = []
       while (batch.length < MAX_PER_RUN) {
         const date = occurrence(rule.start, rule.freq, n)
         if (date > now) break
         batch.push(
           compact(
             {
+              // ID tetap per kejadian: perangkat lain yang menjalankan aturan yang sama menghasilkan ID sama
+              id: recurringTxId(rule.id, n),
+              updatedAt: ts,
               type: rule.type,
               amount: rule.amount,
               categoryId: rule.categoryId,
@@ -51,16 +55,21 @@ export async function runRecurring(now = Date.now()): Promise<number> {
               note: rule.note,
               recurringId: rule.id,
             },
-            ['amount', 'categoryId'],
+            ['amount'],
           ),
         )
         n++
       }
-      if (batch.length) {
-        await db.transactions.bulkAdd(batch)
-        await db.recurring.update(rule.id!, { n })
-        created += batch.length
-      }
+      if (!batch.length) continue
+
+      // Jangan menimpa yang sudah ada — termasuk nisan, agar transaksi yang sudah dihapus user tidak muncul lagi
+      const existing = await db.transactions.bulkGet(batch.map((t) => t.id))
+      const fresh = batch.filter((_, i) => !existing[i])
+      if (fresh.length) await db.transactions.bulkAdd(fresh)
+      // `n` diperbarui tanpa mengubah updatedAt: ini status lokal, bukan editan user,
+      // sehingga tidak mengalahkan perubahan aturan dari perangkat lain saat digabung.
+      await db.recurring.update(rule.id, { n })
+      created += fresh.length
     }
   })
   return created

@@ -6,6 +6,7 @@ import { ConfirmProvider } from './components/confirm'
 import { Toaster } from './components/ui/sonner'
 import { SettingsProvider } from './lib/settings'
 import { MonthProvider } from './lib/month'
+import { prepareDatabase } from './db/migrate'
 // Dimuat sedini mungkin agar event `beforeinstallprompt` tidak terlewat
 import './lib/pwa'
 import './index.css'
@@ -13,6 +14,10 @@ import './index.css'
 // Data hanya ada di IndexedDB perangkat: minta penyimpanan persisten agar tidak dihapus otomatis
 // oleh browser saat ruang penyimpanan menipis. Browser bisa menolak; aplikasi tetap berjalan.
 navigator.storage?.persist?.().catch(() => {})
+
+// Migrasi data lama & data bawaan disiapkan dulu, baru aplikasi dirender
+// (mencegah layar sempat kosong lalu terisi, dan pengaturan lama sudah dipetakan ke ID baru).
+await prepareDatabase().catch((e) => console.error('prepareDatabase failed', e))
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

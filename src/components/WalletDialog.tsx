@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { db, type Wallet } from '@/db/db'
+import { insert, patch, type Wallet } from '@/db/db'
 import { useWalletName } from '@/db/hooks'
 import { useSettings } from '@/lib/settings'
 import { cn } from '@/lib/utils'
@@ -43,12 +43,12 @@ export default function WalletDialog({ open, onOpenChange, wallet }: Props) {
     e.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) return setError(t('cat.nameError'))
-    if (wallet?.id !== undefined) {
+    if (wallet) {
       const keepBuiltin = wallet.builtin && trimmed === walletName(wallet)
-      // `builtin: undefined` membuat Dexie menghapus kunci terjemahan bila nama diganti user
-      await db.wallets.update(wallet.id, { name: keepBuiltin ? '' : trimmed, icon, color, initial, builtin: keepBuiltin ? wallet.builtin : undefined })
+      // `builtin: undefined` menghapus kunci terjemahan bila nama diganti user
+      await patch('wallets', wallet.id, { name: keepBuiltin ? '' : trimmed, icon, color, initial, builtin: keepBuiltin ? wallet.builtin : undefined })
     } else {
-      await db.wallets.add({ name: trimmed, icon, color, initial })
+      await insert('wallets', { name: trimmed, icon, color, initial }, { keep: ['initial'] })
     }
     toast.success(t('common.saved'))
     onOpenChange(false)

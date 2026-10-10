@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo } from 'react'
-import { db, type Category, type Transaction, type Wallet } from './db'
+import { allAlive, db, getAlive, isAlive, patch, type Budget, type Category, type Transaction, type Wallet } from './db'
 import { fractionDigits, monthRange } from '../lib/format'
 import type { DictKey } from '../lib/i18n'
 import { useSettings } from '../lib/settings'
@@ -9,12 +9,13 @@ import { computeSplit } from '../lib/split'
 const EMPTY: never[] = []
 
 export function useCategories() {
-  return useLiveQuery(() => db.categories.toArray(), [], EMPTY as Category[])
+  return useLiveQuery(() => allAlive('categories'), [], EMPTY as Category[])
 }
 
 export function useCategoryMap() {
   const categories = useCategories()
-  return useMemo(() => new Map(categories.map((c) => [c.id!, c])), [categories])
+  // Kunci boleh undefined agar `map.get(tx.categoryId)` aman untuk transfer (tanpa kategori)
+  return useMemo(() => new Map<string | undefined, Category>(categories.map((c) => [c.id, c])), [categories])
 }
 
 /** Nama kategori sesuai bahasa aktif */
@@ -28,12 +29,12 @@ export function useCategoryName() {
 
 /** Semua dompet (termasuk yang diarsipkan; filter `archived` di pemanggil bila perlu) */
 export function useWallets() {
-  return useLiveQuery(() => db.wallets.toArray(), [], EMPTY as Wallet[])
+  return useLiveQuery(() => allAlive('wallets'), [], EMPTY as Wallet[])
 }
 
 export function useWalletMap() {
   const wallets = useWallets()
-  return useMemo(() => new Map(wallets.map((w) => [w.id!, w])), [wallets])
+  return useMemo(() => new Map(wallets.map((w) => [w.id, w])), [wallets])
 }
 
 export function useWalletName() {
@@ -48,8 +49,9 @@ export function useWalletName() {
 export function useMonthTransactions(year: number, month: number) {
   return useLiveQuery(async () => {
     const [start, end] = monthRange(year, month)
+    // Nisan tidak punya `date`, jadi tidak ikut terbaca lewat index ini
     const list = await db.transactions.where('date').between(start, end, true, false).toArray()
-    return list.sort((a, b) => b.date - a.date)
+    return list.filter(isAlive).sort((a, b) => b.date - a.date)
   }, [year, month])
 }
 
@@ -60,10 +62,11 @@ export function useMonthTransactions(year: number, month: number) {
 export function useBalances() {
   return useLiveQuery(
     async () => {
-      const wallets = await db.wallets.toArray()
-      const byWallet = new Map<number, number>(wallets.map((w) => [w.id!, w.initial]))
-      const add = (id: number | undefined, v: number) => id !== undefined && byWallet.set(id, (byWallet.get(id) ?? 0) + v)
+      const wallets = await allAlive('wallets')
+      const byWallet = new Map<string, number>(wallets.map((w) => [w.id, w.initial ?? 0]))
+      const add = (id: string | undefined, v: number) => id !== undefined && byWallet.has(id) && byWallet.set(id, byWallet.get(id)! + v)
       await db.transactions.each((t) => {
+        if (t.deletedAt) return
         if (t.type === 'income') add(t.walletId, t.amount)
         else if (t.type === 'expense') add(t.walletId, -t.amount)
         else {
@@ -76,7 +79,7 @@ export function useBalances() {
       return { byWallet, total }
     },
     [],
-    { byWallet: new Map<number, number>(), total: 0 },
+    { byWallet: new Map<string, number>(), total: 0 },
   )
 }
 
@@ -92,19 +95,19 @@ export interface BudgetStatus {
 export function useBudgetStatus(year: number, month: number) {
   const txs = useMonthTransactions(year, month)
   const categories = useCategories()
-  const budgets = useLiveQuery(() => db.budgets.toArray(), [], EMPTY as { categoryId: number; amount: number }[])
+  const budgets = useLiveQuery(() => allAlive('budgets'), [], EMPTY as Budget[])
 
   return useMemo(() => {
-    const limits = new Map(budgets.map((b) => [b.categoryId, b.amount]))
-    const spent = new Map<number, number>()
+    const limits = new Map(budgets.map((b) => [b.id, b.amount]))
+    const spent = new Map<string, number>()
     for (const tx of txs ?? []) {
-      if (tx.type === 'expense') spent.set(tx.categoryId, (spent.get(tx.categoryId) ?? 0) + tx.amount)
+      if (tx.type === 'expense' && tx.categoryId) spent.set(tx.categoryId, (spent.get(tx.categoryId) ?? 0) + tx.amount)
     }
     return categories
       .filter((c) => c.type === 'expense')
       .map<BudgetStatus>((c) => {
-        const limit = limits.get(c.id!) ?? 0
-        const s = spent.get(c.id!) ?? 0
+        const limit = limits.get(c.id) ?? 0
+        const s = spent.get(c.id) ?? 0
         return { category: c, limit, spent: s, pct: limit > 0 ? (s / limit) * 100 : 0 }
       })
   }, [txs, categories, budgets])
@@ -129,7 +132,7 @@ export interface DebtEntry {
   date: number
   paid: boolean
   title?: string
-  source: { kind: 'manual'; id: number } | { kind: 'split'; billId: number; participantId: string }
+  source: { kind: 'manual'; id: string } | { kind: 'split'; billId: string; participantId: string }
 }
 
 /**
@@ -139,8 +142,8 @@ export interface DebtEntry {
 export function useDebts() {
   const { settings } = useSettings()
   const decimals = fractionDigits(settings.currency)
-  const manual = useLiveQuery(() => db.debts.toArray(), [])
-  const bills = useLiveQuery(() => db.splitBills.toArray(), [])
+  const manual = useLiveQuery(() => allAlive('debts'), [])
+  const bills = useLiveQuery(() => allAlive('splitBills'), [])
 
   return useMemo(() => {
     if (!manual || !bills) return undefined
@@ -152,7 +155,7 @@ export function useDebts() {
       date: d.date,
       paid: !!d.paid,
       title: d.note,
-      source: { kind: 'manual', id: d.id! },
+      source: { kind: 'manual', id: d.id },
     }))
 
     for (const b of bills) {
@@ -173,7 +176,7 @@ export function useDebts() {
             date: b.date,
             paid: !!p.paid,
             title: b.title,
-            source: { kind: 'split', billId: b.id!, participantId: p.id },
+            source: { kind: 'split', billId: b.id, participantId: p.id },
           })
         }
       } else {
@@ -189,7 +192,7 @@ export function useDebts() {
             date: b.date,
             paid: !!me.paid,
             title: b.title,
-            source: { kind: 'split', billId: b.id!, participantId: me.id },
+            source: { kind: 'split', billId: b.id, participantId: me.id },
           })
         }
       }
@@ -210,16 +213,16 @@ export function useDebts() {
 /** Tandai lunas / belum lunas untuk entri hutang dari sumber mana pun */
 export async function setDebtPaid(entry: DebtEntry, paid: boolean) {
   if (entry.source.kind === 'manual') {
-    await db.debts.update(entry.source.id, { paid: paid || undefined })
+    await patch('debts', entry.source.id, { paid: paid || undefined })
     return
   }
   const { billId, participantId } = entry.source
-  const bill = await db.splitBills.get(billId)
+  const bill = await getAlive('splitBills', billId)
   if (!bill) return
   const participants = bill.participants.map((p) => {
     if (p.id !== participantId) return p
     const { paid: _old, ...rest } = p
     return paid ? { ...rest, paid: true } : rest
   })
-  await db.splitBills.update(billId, { participants })
+  await patch('splitBills', billId, { participants })
 }

@@ -6,13 +6,13 @@ import EmptyState from '@/components/EmptyState'
 import PageHeader from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { db } from '@/db/db'
+import { allAlive } from '@/db/db'
 import { formatDate } from '@/lib/format'
 import { useSettings } from '@/lib/settings'
 
 export default function Notes() {
   const { settings, t } = useSettings()
-  const notes = useLiveQuery(() => db.notes.orderBy('updatedAt').reverse().toArray(), [])
+  const notes = useLiveQuery(async () => (await allAlive('notes')).sort((a, b) => b.updatedAt - a.updatedAt), [])
   const [query, setQuery] = useState('')
 
   const list = useMemo(() => {

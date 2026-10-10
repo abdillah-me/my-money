@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { compact, compactPatch, db, type Debt } from '@/db/db'
+import { insert, patch, type Debt } from '@/db/db'
 import { useSettings } from '@/lib/settings'
 
 interface Props {
@@ -41,8 +41,8 @@ export default function DebtDialog({ open, onOpenChange, debt }: Props) {
     if (!person.trim()) return setError(t('debt.personError'))
     if (amount <= 0) return setError(t('tx.amountError'))
     const data = { person: person.trim(), amount, dir, date, note: note.trim() }
-    if (debt?.id !== undefined) await db.debts.update(debt.id, compactPatch(data))
-    else await db.debts.add(compact(data, ['amount']))
+    if (debt) await patch('debts', debt.id, data)
+    else await insert('debts', data, { keep: ['amount'] })
     toast.success(t('common.saved'))
     onOpenChange(false)
   }

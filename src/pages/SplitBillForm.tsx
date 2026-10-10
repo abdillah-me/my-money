@@ -14,26 +14,26 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { compact, db, type SplitBill } from '@/db/db'
+import { allAlive, getAlive, insert, patch, remove as removeRecord, type SplitBill } from '@/db/db'
 import { formatDate, fractionDigits } from '@/lib/format'
 import { useGoBack } from '@/lib/nav'
 import { useSettings } from '@/lib/settings'
 import { computeSplit, uid } from '@/lib/split'
 import { cn } from '@/lib/utils'
 
-type Draft = Omit<SplitBill, 'id' | 'createdAt' | 'updatedAt'>
+type Draft = Omit<SplitBill, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>
 
 const cardCls = 'rounded-3xl shadow-card ring-0'
 
 export default function SplitBillForm() {
   const { id } = useParams()
-  const editId = id ? Number(id) : undefined
+  const editId = id || undefined
   const goBack = useGoBack('/split-bill')
   const confirm = useConfirm()
   const { settings, t, money } = useSettings()
   const decimals = fractionDigits(settings.currency)
 
-  const [billId, setBillId] = useState<number | undefined>(editId)
+  const [billId, setBillId] = useState<string | undefined>(editId)
   const [draft, setDraft] = useState<Draft>(() => ({
     title: '',
     date: Date.now(),
@@ -51,10 +51,9 @@ export default function SplitBillForm() {
 
   useEffect(() => {
     if (editId === undefined) return
-    if (Number.isNaN(editId)) return setNotFound(true)
-    db.splitBills.get(editId).then((b) => {
+    getAlive('splitBills', editId).then((b) => {
       if (!b) return setNotFound(true)
-      const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = b
+      const { id: _id, createdAt: _c, updatedAt: _u, deletedAt: _d, ...rest } = b
       setDraft(rest)
       setLoaded(true)
     })
@@ -121,21 +120,20 @@ export default function SplitBillForm() {
   }
 
   /** Simpan tagihan, kembalikan ID-nya. `null` jika validasi gagal. */
-  const persist = async (): Promise<number | null> => {
+  const persist = async (): Promise<string | null> => {
     const err = validate()
     setError(err)
     if (err) {
       toast.error(err)
       return null
     }
-    const now = Date.now()
-    const data = { ...draft, title: draft.title.trim(), updatedAt: now }
+    const data = { ...draft, title: draft.title.trim() }
     if (billId !== undefined) {
-      // Field undefined (mis. payerId) membuat Dexie menghapus properti tersebut
-      await db.splitBills.update(billId, data)
+      // Field undefined (mis. payerId) menghapus properti tersebut
+      await patch('splitBills', billId, data)
       return billId
     }
-    const newId = (await db.splitBills.add(compact({ ...data, createdAt: now }, ['total', 'taxPct', 'servicePct']))) as number
+    const newId = await insert('splitBills', { ...data, createdAt: Date.now() }, { keep: ['total', 'taxPct', 'servicePct'] })
     setBillId(newId)
     return newId
   }
@@ -150,7 +148,7 @@ export default function SplitBillForm() {
   const remove = async () => {
     if (billId === undefined) return
     if (!(await confirm({ title: t('split.deleteConfirm'), description: draft.title, destructive: true }))) return
-    await db.splitBills.delete(billId)
+    await removeRecord('splitBills', billId)
     toast.success(t('common.deleted'))
     goBack()
   }
@@ -183,23 +181,23 @@ export default function SplitBillForm() {
     const savedId = await persist()
     if (savedId === null) return
 
-    const cats = await db.categories.where('type').equals('expense').toArray()
+    const cats = (await allAlive('categories')).filter((c) => c.type === 'expense')
     const category = cats.find((c) => c.builtin === 'food') ?? cats[0]
     if (!category) return
 
     const tx = { type: 'expense' as const, amount, date: draft.date, note: draft.title.trim() }
-    const existing = draft.transactionId !== undefined ? await db.transactions.get(draft.transactionId) : undefined
+    const existing = await getAlive('transactions', draft.transactionId)
     let txId = existing?.id
-    if (existing) await db.transactions.update(existing.id!, tx)
+    if (existing) await patch('transactions', existing.id, tx)
     else {
       // Pakai dompet terakhir bila masih aktif, selain itu dompet aktif pertama
-      const wallets = (await db.wallets.toArray()).filter((w) => !w.archived)
+      const wallets = (await allAlive('wallets')).filter((w) => !w.archived)
       const walletId = wallets.find((w) => w.id === settings.lastWallet)?.id ?? wallets[0]?.id
       if (walletId === undefined) return
-      txId = (await db.transactions.add(compact({ ...tx, categoryId: category.id!, walletId }, ['amount']))) as number
+      txId = await insert('transactions', { ...tx, categoryId: category.id, walletId }, { keep: ['amount'] })
     }
 
-    await db.splitBills.update(savedId, { transactionId: txId })
+    await patch('splitBills', savedId, { transactionId: txId })
     setDraft((d) => ({ ...d, transactionId: txId }))
     toast.success(t('split.recorded'))
   }

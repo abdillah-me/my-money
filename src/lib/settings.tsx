@@ -18,9 +18,13 @@ export interface Settings {
   /** Ukuran teks untuk keterbacaan (mis. pengguna lanjut usia) */
   textSize: TextSize
   /** Kategori terakhir per tipe, dipilih otomatis di form transaksi */
-  lastCategory: { income?: number; expense?: number }
+  lastCategory: { income?: string; expense?: string }
   /** Dompet terakhir dipakai */
-  lastWallet?: number
+  lastWallet?: string
+  /** Waktu backup terakhir berhasil dibagikan/diunduh (ms) */
+  lastBackupAt?: number
+  /** Pengingat backup ditunda sampai waktu ini (ms) */
+  backupSnoozeUntil?: number
 }
 
 const STORAGE_KEY = 'wahduid.settings'
@@ -48,7 +52,12 @@ function load(): Settings {
       currency: parsed.currency === 'USD' || parsed.currency === 'IDR' ? parsed.currency : defaults.currency,
       theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
       textSize: parsed.textSize === 'large' || parsed.textSize === 'xlarge' ? parsed.textSize : 'normal',
-      lastCategory: parsed.lastCategory && typeof parsed.lastCategory === 'object' ? parsed.lastCategory : {},
+      lastCategory: {
+        income: typeof parsed.lastCategory?.income === 'string' ? parsed.lastCategory.income : undefined,
+        expense: typeof parsed.lastCategory?.expense === 'string' ? parsed.lastCategory.expense : undefined,
+      },
+      // Nilai lama berupa angka (sebelum ID string) diabaikan
+      lastWallet: typeof parsed.lastWallet === 'string' ? parsed.lastWallet : undefined,
     }
   } catch {
     return defaults

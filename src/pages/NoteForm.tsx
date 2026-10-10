@@ -7,13 +7,13 @@ import PageHeader from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { db } from '@/db/db'
+import { getAlive, insert, patch, remove as removeRecord } from '@/db/db'
 import { useGoBack } from '@/lib/nav'
 import { useSettings } from '@/lib/settings'
 
 export default function NoteForm() {
   const { id } = useParams()
-  const editId = id ? Number(id) : undefined
+  const editId = id || undefined
   const goBack = useGoBack('/note')
   const confirm = useConfirm()
   const { t } = useSettings()
@@ -26,12 +26,11 @@ export default function NoteForm() {
 
   useEffect(() => {
     if (editId === undefined) return
-    if (Number.isNaN(editId)) return setNotFound(true)
-    db.notes.get(editId).then((n) => {
+    getAlive('notes', editId).then((n) => {
       if (!n) return setNotFound(true)
-      setTitle(n.title)
-      setContent(n.content)
-      setPinned(n.pinned)
+      setTitle(n.title ?? '')
+      setContent(n.content ?? '')
+      setPinned(!!n.pinned)
       setLoaded(true)
     })
   }, [editId])
@@ -40,9 +39,9 @@ export default function NoteForm() {
     e.preventDefault()
     // Catatan kosong tidak disimpan
     if (!title.trim() && !content.trim()) return goBack()
-    const data = { title: title.trim(), content, pinned, updatedAt: Date.now() }
-    if (editId !== undefined) await db.notes.update(editId, data)
-    else await db.notes.add(data)
+    const data = { title: title.trim(), content, pinned }
+    if (editId !== undefined) await patch('notes', editId, data)
+    else await insert('notes', data)
     toast.success(t('common.saved'))
     goBack()
   }
@@ -50,7 +49,7 @@ export default function NoteForm() {
   const remove = async () => {
     if (editId === undefined) return
     if (!(await confirm({ title: t('note.deleteConfirm'), description: title || undefined, destructive: true }))) return
-    await db.notes.delete(editId)
+    await removeRecord('notes', editId)
     toast.success(t('common.deleted'))
     goBack()
   }

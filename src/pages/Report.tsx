@@ -26,10 +26,11 @@ export default function Report() {
 
   // Total per kategori, urut dari yang terbesar
   const byCategory = useMemo(() => {
-    const totals = new Map<number, number>()
+    const totals = new Map<string, number>()
     for (const tx of txs ?? []) {
       if (tx.type !== type) continue
-      totals.set(tx.categoryId, (totals.get(tx.categoryId) ?? 0) + tx.amount)
+      const key = tx.categoryId ?? ''
+      totals.set(key, (totals.get(key) ?? 0) + tx.amount)
     }
     const sum = [...totals.values()].reduce((a, b) => a + b, 0) || 1
     return [...totals.entries()]

@@ -4,14 +4,14 @@ import { Link } from 'react-router-dom'
 import EmptyState from '@/components/EmptyState'
 import PageHeader from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
-import { db } from '@/db/db'
+import { allAlive } from '@/db/db'
 import { formatDate, fractionDigits } from '@/lib/format'
 import { useSettings } from '@/lib/settings'
 import { computeSplit } from '@/lib/split'
 
 export default function SplitBills() {
   const { settings, t, money } = useSettings()
-  const bills = useLiveQuery(() => db.splitBills.orderBy('date').reverse().toArray(), [])
+  const bills = useLiveQuery(async () => (await allAlive('splitBills')).sort((a, b) => b.date - a.date), [])
   const decimals = fractionDigits(settings.currency)
 
   return (

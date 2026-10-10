@@ -15,7 +15,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { compactPatch, db, type RecurringRule } from '@/db/db'
+import { allAlive, patch, remove as removeRecord, type RecurringRule } from '@/db/db'
 import { useCategoryMap, useCategoryName, useWalletMap, useWalletName } from '@/db/hooks'
 import { formatDate } from '@/lib/format'
 import { nextDue } from '@/lib/recurring'
@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils'
 export default function Recurring() {
   const { settings, t, money } = useSettings()
   const confirm = useConfirm()
-  const rules = useLiveQuery(() => db.recurring.toArray(), [])
+  const rules = useLiveQuery(() => allAlive('recurring'), [])
   const categories = useCategoryMap()
   const catName = useCategoryName()
   const wallets = useWalletMap()
@@ -37,12 +37,12 @@ export default function Recurring() {
   const sorted = [...(rules ?? [])].sort((a, b) => nextDue(a) - nextDue(b))
 
   const togglePause = async (r: RecurringRule) => {
-    await db.recurring.update(r.id!, { paused: r.paused ? undefined : true })
+    await patch('recurring', r.id, { paused: r.paused ? undefined : true })
   }
 
   const remove = async (r: RecurringRule) => {
     if (!(await confirm({ title: t('recurring.deleteConfirm'), description: t('recurring.deleteDesc'), destructive: true }))) return
-    await db.recurring.delete(r.id!)
+    await removeRecord('recurring', r.id)
     toast.success(t('common.deleted'))
   }
 
@@ -126,9 +126,9 @@ export default function Recurring() {
 function RuleEditor({ open, onOpenChange, rule }: { open: boolean; onOpenChange: (v: boolean) => void; rule: RecurringRule | null }) {
   const { t } = useSettings()
   const [amount, setAmount] = useState(0)
-  const [walletId, setWalletId] = useState<number | undefined>()
+  const [walletId, setWalletId] = useState<string | undefined>()
   const [note, setNote] = useState('')
-  const [lastId, setLastId] = useState<number | undefined>()
+  const [lastId, setLastId] = useState<string | undefined>()
 
   // Sinkronkan form saat aturan yang diedit berganti
   if (rule && rule.id !== lastId) {
@@ -141,7 +141,7 @@ function RuleEditor({ open, onOpenChange, rule }: { open: boolean; onOpenChange:
   const save = async (e: FormEvent) => {
     e.preventDefault()
     if (!rule || amount <= 0 || walletId === undefined) return
-    await db.recurring.update(rule.id!, compactPatch({ amount, walletId, note: note.trim() }))
+    await patch('recurring', rule.id, { amount, walletId, note: note.trim() })
     toast.success(t('common.saved'))
     setLastId(undefined)
     onOpenChange(false)

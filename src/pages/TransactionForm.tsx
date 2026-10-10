@@ -16,7 +16,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { compact, compactPatch, db, type Frequency, type TxType } from '@/db/db'
+import { db, getAlive, insert, patch, recurringTxId, remove as removeRecord, type Frequency, type TxType } from '@/db/db'
 import { useCategories, useCategoryName, useWallets } from '@/db/hooks'
 import { fractionDigits, formatCompact } from '@/lib/format'
 import { useGoBack } from '@/lib/nav'
@@ -32,7 +32,7 @@ const parseType = (v: string | null): TxType => (v === 'income' || v === 'transf
 
 export default function TransactionForm() {
   const { id } = useParams()
-  const editId = id ? Number(id) : undefined
+  const editId = id || undefined
   const [params] = useSearchParams()
   const goBack = useGoBack()
   const confirm = useConfirm()
@@ -43,15 +43,15 @@ export default function TransactionForm() {
 
   const [type, setType] = useState<TxType>(parseType(params.get('type')))
   const [amount, setAmount] = useState(0)
-  const [categoryId, setCategoryId] = useState<number | undefined>(
+  const [categoryId, setCategoryId] = useState<string | undefined>(
     type === 'transfer' ? undefined : settings.lastCategory[type],
   )
-  const [walletId, setWalletId] = useState<number | undefined>(settings.lastWallet)
-  const [toWalletId, setToWalletId] = useState<number | undefined>()
+  const [walletId, setWalletId] = useState<string | undefined>(settings.lastWallet)
+  const [toWalletId, setToWalletId] = useState<string | undefined>()
   const [date, setDate] = useState(Date.now())
   const [note, setNote] = useState('')
   const [repeat, setRepeat] = useState<Repeat>('none')
-  const [recurringId, setRecurringId] = useState<number | undefined>()
+  const [recurringId, setRecurringId] = useState<string | undefined>()
   const [errors, setErrors] = useState<{ amount?: string; category?: string; wallet?: string }>({})
   const [loaded, setLoaded] = useState(editId === undefined)
   const [notFound, setNotFound] = useState(false)
@@ -60,8 +60,7 @@ export default function TransactionForm() {
   // Muat data saat mode edit
   useEffect(() => {
     if (editId === undefined) return
-    if (Number.isNaN(editId)) return setNotFound(true)
-    db.transactions.get(editId).then((tx) => {
+    getAlive('transactions', editId).then((tx) => {
       if (!tx) return setNotFound(true)
       setType(tx.type)
       setAmount(tx.amount)
@@ -105,7 +104,7 @@ export default function TransactionForm() {
     const base = {
       type,
       amount,
-      categoryId: isTransfer ? 0 : categoryId!,
+      categoryId: isTransfer ? undefined : categoryId,
       walletId: walletId!,
       toWalletId: isTransfer ? toWalletId : undefined,
       date,
@@ -113,17 +112,20 @@ export default function TransactionForm() {
     }
 
     if (editId !== undefined) {
-      await db.transactions.update(editId, compactPatch(base))
+      await patch('transactions', editId, base)
     } else {
       await db.transaction('rw', db.transactions, db.recurring, async () => {
-        let rid: number | undefined
         if (repeat !== 'none' && !isTransfer) {
-          // Transaksi ini = kejadian ke-0, jadi aturan mulai dari kejadian ke-1
-          rid = (await db.recurring.add(
-            compact({ type, amount, categoryId: categoryId!, walletId: walletId!, note: base.note, freq: repeat, start: date, n: 1 }, ['amount', 'categoryId', 'n']),
-          )) as number
+          // Transaksi ini = kejadian ke-0 dengan ID tetap, aturan mulai dari kejadian ke-1
+          const rid = await insert(
+            'recurring',
+            { type, amount, categoryId: categoryId!, walletId: walletId!, note: base.note, freq: repeat, start: date, n: 1 },
+            { keep: ['amount', 'n'] },
+          )
+          await insert('transactions', { ...base, recurringId: rid }, { id: recurringTxId(rid, 0), keep: ['amount'] })
+        } else {
+          await insert('transactions', base, { keep: ['amount'] })
         }
-        await db.transactions.add(compact({ ...base, recurringId: rid }, ['amount', 'categoryId']))
       })
     }
 
@@ -138,7 +140,7 @@ export default function TransactionForm() {
   const remove = async () => {
     if (editId === undefined) return
     if (!(await confirm({ title: t('tx.deleteConfirm'), destructive: true }))) return
-    await db.transactions.delete(editId)
+    await removeRecord('transactions', editId)
     toast.success(t('tx.deleted'))
     goBack()
   }

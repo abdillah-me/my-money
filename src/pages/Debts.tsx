@@ -10,7 +10,7 @@ import Segmented from '@/components/Segmented'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { db, type Debt } from '@/db/db'
+import { getAlive, remove as removeRecord, type Debt } from '@/db/db'
 import { setDebtPaid, useDebts, type DebtEntry } from '@/db/hooks'
 import { formatDate } from '@/lib/format'
 import { useSettings } from '@/lib/settings'
@@ -32,7 +32,7 @@ export default function Debts() {
   )
 
   const open = async (entry?: DebtEntry) => {
-    setEditing(entry?.source.kind === 'manual' ? await db.debts.get(entry.source.id) : undefined)
+    setEditing(entry?.source.kind === 'manual' ? await getAlive('debts', entry.source.id) : undefined)
     setDialog(true)
   }
 
@@ -44,7 +44,7 @@ export default function Debts() {
   const remove = async (e: DebtEntry) => {
     if (e.source.kind !== 'manual') return
     if (!(await confirm({ title: t('debt.deleteConfirm'), description: e.person, destructive: true }))) return
-    await db.debts.delete(e.source.id)
+    await removeRecord('debts', e.source.id)
     toast.success(t('common.deleted'))
   }
 

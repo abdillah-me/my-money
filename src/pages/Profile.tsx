@@ -2,21 +2,23 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import {
   CheckCircle2,
   ChevronRight,
-  Download,
   FileSpreadsheet,
   HardDrive,
   Lock,
   Repeat,
+  Share2,
   Tags,
   Target,
   Trash2,
   Upload,
 } from 'lucide-react'
-import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
+import BackupDialog from '@/components/BackupDialog'
 import { useConfirm } from '@/components/confirm'
 import InstallButton from '@/components/InstallButton'
+import RestoreDialog from '@/components/RestoreDialog'
 import PinSetup from '@/components/PinSetup'
 import Segmented from '@/components/Segmented'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -25,8 +27,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { clearAllData, db, exportBackup, importBackup } from '@/db/db'
+import { allAlive, clearAllData, db, TABLES, tbl } from '@/db/db'
 import { useCategoryName, useWalletName } from '@/db/hooks'
+import { daysSince, deliverFile } from '@/lib/backupFile'
 import { CURRENCIES, toDateInput, toTimeInput, type Currency } from '@/lib/format'
 import type { Lang } from '@/lib/i18n'
 import { hasPin } from '@/lib/lock'
@@ -34,14 +37,6 @@ import { useInstallPrompt } from '@/lib/pwa'
 import { useSettings, type TextSize, type Theme } from '@/lib/settings'
 import { cn } from '@/lib/utils'
 
-function download(filename: string, content: string, mime: string) {
-  const url = URL.createObjectURL(new Blob([content], { type: mime }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 /** Escape nilai CSV + cegah formula injection saat dibuka di spreadsheet */
 function csvCell(v: string | number) {
@@ -58,28 +53,30 @@ export default function Profile() {
   const catName = useCategoryName()
   const walletName = useWalletName()
   const { standalone } = useInstallPrompt()
-  const fileRef = useRef<HTMLInputElement>(null)
   const [pinOn, setPinOn] = useState(hasPin)
   const [pinDialog, setPinDialog] = useState(false)
+  const [backupOpen, setBackupOpen] = useState(false)
+  const [restoreOpen, setRestoreOpen] = useState(false)
   const storage = useStorageInfo()
+  const backupDays = daysSince(settings.lastBackupAt)
 
   const stamp = toDateInput(Date.now())
 
-  const exportJson = async () => {
-    download(`wahduid-backup-${stamp}.json`, JSON.stringify(await exportBackup(), null, 2), 'application/json')
-  }
-
   const exportCsv = async () => {
-    const [txs, cats, wallets] = await Promise.all([db.transactions.orderBy('date').toArray(), db.categories.toArray(), db.wallets.toArray()])
-    const map = new Map(cats.map((c) => [c.id!, c]))
-    const wmap = new Map(wallets.map((w) => [w.id!, w]))
+    const [txs, cats, wallets] = await Promise.all([
+      db.transactions.orderBy('date').filter((x) => !x.deletedAt).toArray(),
+      allAlive('categories'),
+      allAlive('wallets'),
+    ])
+    const map = new Map(cats.map((c) => [c.id, c]))
+    const wmap = new Map(wallets.map((w) => [w.id, w]))
     const rows = [
       ['date', 'time', 'type', 'category', 'wallet', 'to_wallet', 'amount', 'note'],
       ...txs.map((x) => [
         toDateInput(x.date),
         toTimeInput(x.date),
         x.type,
-        x.type === 'transfer' ? '' : catName(map.get(x.categoryId)),
+        x.type === 'transfer' ? '' : catName(map.get(x.categoryId ?? '')),
         walletName(wmap.get(x.walletId)),
         x.toWalletId !== undefined ? walletName(wmap.get(x.toWalletId)) : '',
         x.amount,
@@ -87,20 +84,8 @@ export default function Profile() {
       ]),
     ]
     // BOM agar Excel membaca UTF-8 (emoji / karakter non-ASCII) dengan benar
-    download(`wahduid-${stamp}.csv`, '\uFEFF' + rows.map((r) => r.map(csvCell).join(',')).join('\n'), 'text/csv')
-  }
-
-  const onImport = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    if (!(await confirm({ title: t('profile.import'), description: t('profile.importConfirm'), confirmText: t('profile.import') }))) return
-    try {
-      await importBackup(JSON.parse(await file.text()))
-      toast.success(t('profile.importSuccess'))
-    } catch {
-      toast.error(t('profile.importError'))
-    }
+    const file = new File(['\uFEFF' + rows.map((r) => r.map(csvCell).join(',')).join('\n')], `wahduid-${stamp}.csv`, { type: 'text/csv' })
+    await deliverFile(file)
   }
 
   const reset = async () => {
@@ -226,13 +211,18 @@ export default function Profile() {
         </Section>
 
         <Section title={t('profile.data')}>
+          <Card className={cn(cardCls, 'mb-3 divide-y-0 gap-1 p-4')}>
+            <p className="text-sm font-medium">{t('backup.title')}</p>
+            <p className={cn('text-xs', backupDays === undefined || backupDays >= 7 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>
+              {backupDays === undefined ? t('backup.never') : backupDays === 0 ? t('backup.today') : t('backup.daysAgo', { n: backupDays })}
+            </p>
+          </Card>
           <Card className={cardCls}>
-            <ActionRow icon={<Download />} label={t('profile.export')} onClick={exportJson} />
-            <ActionRow icon={<Upload />} label={t('profile.import')} onClick={() => fileRef.current?.click()} />
+            <ActionRow icon={<Share2 />} label={t('backup.now')} onClick={() => setBackupOpen(true)} />
+            <ActionRow icon={<Upload />} label={t('backup.restoreTitle')} onClick={() => setRestoreOpen(true)} />
             <ActionRow icon={<FileSpreadsheet />} label={t('profile.exportCsv')} onClick={exportCsv} />
             <ActionRow icon={<Trash2 />} label={t('profile.reset')} onClick={reset} danger />
           </Card>
-          <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImport} />
           {storage && (
             <Card className={cn(cardCls, 'mt-3 divide-y-0 gap-1 p-4')}>
               <p className="flex items-center gap-2 text-sm font-medium">
@@ -250,6 +240,8 @@ export default function Profile() {
         </Section>
       </div>
 
+      <BackupDialog open={backupOpen} onOpenChange={setBackupOpen} />
+      <RestoreDialog open={restoreOpen} onOpenChange={setRestoreOpen} />
       <PinSetup
         open={pinDialog}
         onOpenChange={setPinDialog}
@@ -269,16 +261,8 @@ function formatBytes(n: number) {
 /** Jumlah record + perkiraan ruang yang dipakai origin ini (IndexedDB + cache service worker) */
 function useStorageInfo() {
   return useLiveQuery(async () => {
-    const counts = await Promise.all([
-      db.transactions.count(),
-      db.categories.count(),
-      db.wallets.count(),
-      db.splitBills.count(),
-      db.notes.count(),
-      db.budgets.count(),
-      db.recurring.count(),
-      db.debts.count(),
-    ])
+    // Hanya record aktif (nisan record terhapus tidak dihitung)
+    const counts = await Promise.all(TABLES.map((t) => tbl(t).filter((r) => !r.deletedAt).count()))
     const est = await navigator.storage?.estimate?.().catch(() => undefined)
     const persisted = await navigator.storage?.persisted?.().catch(() => false)
     return { records: counts.reduce((a, b) => a + b, 0), usage: est?.usage, persisted: !!persisted }

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { Label } from '@/components/ui/label'
-import { db } from '@/db/db'
+import { insert, remove as removeRecord } from '@/db/db'
 import { useBudgetStatus, useCategoryName, type BudgetStatus } from '@/db/hooks'
 import { useMonth } from '@/lib/month'
 import { useSettings } from '@/lib/settings'
@@ -39,16 +39,17 @@ export default function Budget() {
   const save = async (e: FormEvent) => {
     e.preventDefault()
     if (!editing) return
-    const categoryId = editing.category.id!
-    if (amount > 0) await db.budgets.put({ categoryId, amount })
-    else await db.budgets.delete(categoryId)
+    // ID anggaran = ID kategori (satu anggaran per kategori)
+    const id = editing.category.id
+    if (amount > 0) await insert('budgets', { amount }, { id })
+    else await removeRecord('budgets', id)
     toast.success(t('common.saved'))
     setOpen(false)
   }
 
   const removeBudget = async () => {
     if (!editing) return
-    await db.budgets.delete(editing.category.id!)
+    await removeRecord('budgets', editing.category.id)
     toast.success(t('common.deleted'))
     setOpen(false)
   }

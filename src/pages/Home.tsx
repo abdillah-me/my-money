@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Eye, EyeOff, HandCoins, Rep
 import { Link } from 'react-router-dom'
 import BudgetBar from '@/components/BudgetBar'
 import AnimatedMoney from '@/components/AnimatedMoney'
+import BackupReminder from '@/components/BackupReminder'
 import InstallBanner from '@/components/InstallBanner'
 import ListSkeleton from '@/components/ListSkeleton'
 import MonthPicker from '@/components/MonthPicker'
@@ -115,6 +116,7 @@ export default function Home() {
         ))}
       </nav>
 
+      <BackupReminder />
       <InstallBanner />
 
       {alerts.length > 0 && (

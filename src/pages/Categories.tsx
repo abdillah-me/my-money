@@ -9,7 +9,7 @@ import Segmented from '@/components/Segmented'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { db, type Category, type CategoryType as TxType } from '@/db/db'
+import { db, getAlive, remove as removeRecord, type Category, type CategoryType as TxType } from '@/db/db'
 import { useCategories, useCategoryName } from '@/db/hooks'
 import { useSettings } from '@/lib/settings'
 
@@ -34,15 +34,16 @@ export default function Categories() {
   }
 
   const remove = async (c: Category) => {
-    const used = await db.transactions.where('categoryId').equals(c.id!).count()
+    // Nisan tidak punya categoryId, jadi hanya transaksi aktif yang terhitung
+    const used = await db.transactions.where('categoryId').equals(c.id).count()
     if (used > 0) {
       toast.error(t('cat.inUse', { n: used }))
       return
     }
     if (!(await confirm({ title: t('cat.deleteConfirm'), description: catName(c), destructive: true }))) return
     await db.transaction('rw', db.categories, db.budgets, async () => {
-      await db.categories.delete(c.id!)
-      await db.budgets.delete(c.id!)
+      await removeRecord('categories', c.id)
+      if (await getAlive('budgets', c.id)) await removeRecord('budgets', c.id)
     })
     toast.success(t('common.deleted'))
   }

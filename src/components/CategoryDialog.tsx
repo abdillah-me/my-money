@@ -13,7 +13,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { db, type Category, type CategoryType as TxType } from '@/db/db'
+import { insert, patch, type Category, type CategoryType as TxType } from '@/db/db'
 import { useCategoryName } from '@/db/hooks'
 import { useSettings } from '@/lib/settings'
 import { cn } from '@/lib/utils'
@@ -31,7 +31,7 @@ interface Props {
   defaultType?: TxType
   /** Kunci tipe (mis. saat dibuka dari form transaksi) */
   lockType?: boolean
-  onSaved?: (id: number) => void
+  onSaved?: (id: string) => void
 }
 
 /** Bottom sheet untuk menambah / mengubah kategori. Dipakai di form transaksi & halaman kategori. */
@@ -59,23 +59,23 @@ export default function CategoryDialog({ open, onOpenChange, category, defaultTy
     e.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) return setError(t('cat.nameError'))
-    const data: Omit<Category, 'id'> = { name: trimmed, icon: icon.trim() || '📌', color, type }
+    const data = { name: trimmed, icon: icon.trim() || '📌', color, type }
 
-    let id: number
-    if (category?.id !== undefined) {
+    let id: string
+    if (category) {
       // Nama bawaan diganti user -> lepas kunci terjemahan agar nama baru dipakai
       const keepBuiltin = category.builtin && trimmed === catName(category)
-      await db.categories.update(category.id, { ...data, builtin: keepBuiltin ? category.builtin : undefined })
+      await patch('categories', category.id, { ...data, name: keepBuiltin ? '' : trimmed, builtin: keepBuiltin ? category.builtin : undefined })
       id = category.id
     } else {
-      id = (await db.categories.add(data)) as number
+      id = await insert('categories', data)
       toast.success(t('cat.added'))
     }
     onSaved?.(id)
     onOpenChange(false)
   }
 
-  const isEdit = category?.id !== undefined
+  const isEdit = !!category
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} repositionInputs={false}>
