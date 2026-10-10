@@ -1,4 +1,4 @@
-import { Check, Plus, Receipt, Share2, Trash2, X } from 'lucide-react'
+import { Check, CheckCircle2, Circle, Plus, Receipt, Share2, Trash2, Wallet, X } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -11,8 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { db, type SplitBill } from '@/db/db'
+import { compact, db, type SplitBill } from '@/db/db'
 import { formatDate, fractionDigits, fromInputs, toDateInput } from '@/lib/format'
 import { useGoBack } from '@/lib/nav'
 import { useSettings } from '@/lib/settings'
@@ -81,6 +82,19 @@ export default function SplitBillForm() {
     set({
       participants: draft.participants.filter((p) => p.id !== pid),
       items: draft.items.map((i) => ({ ...i, participantIds: i.participantIds.filter((x) => x !== pid) })),
+      // Pembayar dihapus -> kembali ke "saya"
+      ...(draft.payerId === pid ? { payerId: undefined } : {}),
+    })
+
+  // Pembayar default = saya (payerId kosong agar tidak menyimpan data berlebih)
+  const payerId = draft.payerId ?? me?.id
+  const togglePaid = (pid: string) =>
+    set({
+      participants: draft.participants.map((p) => {
+        if (p.id !== pid) return p
+        const { paid, ...rest } = p
+        return paid ? rest : { ...rest, paid: true }
+      }),
     })
 
   // ---- Item ----
@@ -116,10 +130,11 @@ export default function SplitBillForm() {
     const now = Date.now()
     const data = { ...draft, title: draft.title.trim(), updatedAt: now }
     if (billId !== undefined) {
+      // Field undefined (mis. payerId) membuat Dexie menghapus properti tersebut
       await db.splitBills.update(billId, data)
       return billId
     }
-    const newId = (await db.splitBills.add({ ...data, createdAt: now })) as number
+    const newId = (await db.splitBills.add(compact({ ...data, createdAt: now }, ['total', 'taxPct', 'servicePct']))) as number
     setBillId(newId)
     return newId
   }
@@ -175,7 +190,13 @@ export default function SplitBillForm() {
     const existing = draft.transactionId !== undefined ? await db.transactions.get(draft.transactionId) : undefined
     let txId = existing?.id
     if (existing) await db.transactions.update(existing.id!, tx)
-    else txId = (await db.transactions.add({ ...tx, categoryId: category.id!, createdAt: Date.now() })) as number
+    else {
+      // Pakai dompet terakhir bila masih aktif, selain itu dompet aktif pertama
+      const wallets = (await db.wallets.toArray()).filter((w) => !w.archived)
+      const walletId = wallets.find((w) => w.id === settings.lastWallet)?.id ?? wallets[0]?.id
+      if (walletId === undefined) return
+      txId = (await db.transactions.add(compact({ ...tx, categoryId: category.id!, walletId }, ['amount']))) as number
+    }
 
     await db.splitBills.update(savedId, { transactionId: txId })
     setDraft((d) => ({ ...d, transactionId: txId }))
@@ -366,13 +387,51 @@ export default function SplitBillForm() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <ul className="space-y-2">
-              {draft.participants.map((p) => (
-                <li key={p.id} className="flex justify-between text-sm">
-                  <span className={cn(p.isMe && 'font-semibold text-primary')}>{p.name}</span>
-                  <span className="font-semibold">{money(result.perPerson.get(p.id) ?? 0)}</span>
-                </li>
-              ))}
+            <div className="space-y-1.5">
+              <Label htmlFor="sb-payer">{t('split.paidBy')}</Label>
+              <Select value={payerId} onValueChange={(v) => set({ payerId: v === me?.id ? undefined : v })}>
+                <SelectTrigger id="sb-payer" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {draft.participants.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <ul className="space-y-1">
+              {draft.participants.map((p) => {
+                const isPayer = p.id === payerId
+                // Yang perlu melunasi: semua peserta selain pembayar. Jika orang lain yang bayar, hanya bagian saya yang dilacak.
+                const tracked = !isPayer && (payerId === me?.id || p.isMe)
+                return (
+                  <li key={p.id} className="flex min-h-9 items-center gap-2 text-sm">
+                    {tracked ? (
+                      <button
+                        type="button"
+                        onClick={() => togglePaid(p.id)}
+                        aria-pressed={!!p.paid}
+                        aria-label={`${p.paid ? t('debt.markUnpaid') : t('debt.markPaid')}: ${p.name}`}
+                        className="grid size-7 place-items-center rounded-full text-primary hover:bg-accent"
+                      >
+                        {p.paid ? <CheckCircle2 className="size-5" aria-hidden /> : <Circle className="size-5 text-muted-foreground" aria-hidden />}
+                      </button>
+                    ) : (
+                      <span className="grid size-7 place-items-center" aria-hidden>
+                        {isPayer && <Wallet className="size-4 text-primary" />}
+                      </span>
+                    )}
+                    <span className={cn('flex-1', p.isMe && 'font-semibold text-primary', p.paid && 'text-muted-foreground line-through')}>
+                      {p.name}
+                      {isPayer && <span className="ml-1 text-xs font-normal text-muted-foreground">({t('split.payer')})</span>}
+                    </span>
+                    <span className="font-semibold">{money(result.perPerson.get(p.id) ?? 0)}</span>
+                  </li>
+                )
+              })}
             </ul>
             <Separator />
             <dl className="space-y-1 text-xs text-muted-foreground">

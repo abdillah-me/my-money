@@ -1,3 +1,4 @@
+import { FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts'
 import MonthPicker from '@/components/MonthPicker'
@@ -36,7 +37,17 @@ export default function Analyze() {
 
   return (
     <>
-      <PageHeader title={t('analyze.title')} />
+      <PageHeader
+        title={t('analyze.title')}
+        hideBack
+        right={
+          <Button asChild variant="ghost" size="icon">
+            <Link to="/report" aria-label={t('menu.report')} title={t('menu.report')}>
+              <FileText aria-hidden />
+            </Link>
+          </Button>
+        }
+      />
       <div className="px-5">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">{t('analyze.overview')}</h2>

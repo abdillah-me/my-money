@@ -1,20 +1,37 @@
-import { CheckCircle2, ChevronRight, Download, FileSpreadsheet, Tags, Target, Trash2, Upload } from 'lucide-react'
-import { useRef, type ChangeEvent, type ReactNode } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import {
+  CheckCircle2,
+  ChevronRight,
+  Download,
+  FileSpreadsheet,
+  HardDrive,
+  Lock,
+  Repeat,
+  Tags,
+  Target,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useConfirm } from '@/components/confirm'
 import InstallButton from '@/components/InstallButton'
+import PinSetup from '@/components/PinSetup'
+import Segmented from '@/components/Segmented'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { clearAllData, db, exportBackup, importBackup } from '@/db/db'
-import { useCategoryName } from '@/db/hooks'
+import { useCategoryName, useWalletName } from '@/db/hooks'
 import { CURRENCIES, toDateInput, toTimeInput, type Currency } from '@/lib/format'
 import type { Lang } from '@/lib/i18n'
+import { hasPin } from '@/lib/lock'
 import { useInstallPrompt } from '@/lib/pwa'
-import { useSettings } from '@/lib/settings'
+import { useSettings, type Theme } from '@/lib/settings'
 import { cn } from '@/lib/utils'
 
 function download(filename: string, content: string, mime: string) {
@@ -39,8 +56,12 @@ export default function Profile() {
   const { settings, update, t } = useSettings()
   const confirm = useConfirm()
   const catName = useCategoryName()
+  const walletName = useWalletName()
   const { standalone } = useInstallPrompt()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [pinOn, setPinOn] = useState(hasPin)
+  const [pinDialog, setPinDialog] = useState(false)
+  const storage = useStorageInfo()
 
   const stamp = toDateInput(Date.now())
 
@@ -49,11 +70,21 @@ export default function Profile() {
   }
 
   const exportCsv = async () => {
-    const [txs, cats] = await Promise.all([db.transactions.orderBy('date').toArray(), db.categories.toArray()])
+    const [txs, cats, wallets] = await Promise.all([db.transactions.orderBy('date').toArray(), db.categories.toArray(), db.wallets.toArray()])
     const map = new Map(cats.map((c) => [c.id!, c]))
+    const wmap = new Map(wallets.map((w) => [w.id!, w]))
     const rows = [
-      ['date', 'time', 'type', 'category', 'amount', 'note'],
-      ...txs.map((x) => [toDateInput(x.date), toTimeInput(x.date), x.type, catName(map.get(x.categoryId)), x.amount, x.note]),
+      ['date', 'time', 'type', 'category', 'wallet', 'to_wallet', 'amount', 'note'],
+      ...txs.map((x) => [
+        toDateInput(x.date),
+        toTimeInput(x.date),
+        x.type,
+        x.type === 'transfer' ? '' : catName(map.get(x.categoryId)),
+        walletName(wmap.get(x.walletId)),
+        x.toWalletId !== undefined ? walletName(wmap.get(x.toWalletId)) : '',
+        x.amount,
+        x.note ?? '',
+      ]),
     ]
     // BOM agar Excel membaca UTF-8 (emoji / karakter non-ASCII) dengan benar
     download(`wahduid-${stamp}.csv`, '\uFEFF' + rows.map((r) => r.map(csvCell).join(',')).join('\n'), 'text/csv')
@@ -131,7 +162,37 @@ export default function Profile() {
         <Card className={cardCls}>
           <NavRow to="/profile/categories" icon={<Tags />} label={t('profile.categories')} />
           <NavRow to="/budget" icon={<Target />} label={t('budget.title')} />
+          <NavRow to="/recurring" icon={<Repeat />} label={t('menu.recurring')} />
         </Card>
+
+        <Section title={t('profile.display')}>
+          <Card className={cn(cardCls, 'divide-y-0 gap-2 p-4')}>
+            <Label>{t('theme.title')}</Label>
+            <Segmented<Theme>
+              label={t('theme.title')}
+              value={settings.theme}
+              onValueChange={(theme) => update({ theme })}
+              options={[
+                { value: 'light', label: t('theme.light') },
+                { value: 'dark', label: t('theme.dark') },
+                { value: 'system', label: t('theme.system') },
+              ]}
+            />
+          </Card>
+        </Section>
+
+        <Section title={t('lock.title')}>
+          <Card className={cn(cardCls, 'divide-y-0 gap-2 p-4')}>
+            <div className="flex items-center gap-3">
+              <Lock className="size-5 text-primary" aria-hidden />
+              <Label htmlFor="p-pin" className="flex-1">
+                {t('lock.toggle')}
+              </Label>
+              <Switch id="p-pin" checked={pinOn} onCheckedChange={() => setPinDialog(true)} />
+            </div>
+            <p className="text-xs text-muted-foreground">{t('lock.note')}</p>
+          </Card>
+        </Section>
 
         <Section title={t('profile.app')}>
           <Card className={cn(cardCls, 'divide-y-0 gap-3 p-4')}>
@@ -160,11 +221,56 @@ export default function Profile() {
             <ActionRow icon={<Trash2 />} label={t('profile.reset')} onClick={reset} danger />
           </Card>
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImport} />
+          {storage && (
+            <Card className={cn(cardCls, 'mt-3 divide-y-0 gap-1 p-4')}>
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <HardDrive className="size-4 text-primary" aria-hidden />
+                {t('storage.title')}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t('storage.records', { n: storage.records.toLocaleString(settings.lang === 'id' ? 'id-ID' : 'en-US') })}
+                {storage.usage !== undefined && ` • ${t('storage.used', { size: formatBytes(storage.usage) })}`}
+              </p>
+              <p className="text-xs text-muted-foreground">{storage.persisted ? t('storage.persisted') : t('storage.notPersisted')}</p>
+            </Card>
+          )}
           <p className="mt-3 px-1 text-xs text-muted-foreground">{t('profile.storageNote')}</p>
         </Section>
       </div>
+
+      <PinSetup
+        open={pinDialog}
+        onOpenChange={setPinDialog}
+        mode={pinOn ? 'disable' : 'enable'}
+        onDone={() => setPinOn(hasPin())}
+      />
     </>
   )
+}
+
+function formatBytes(n: number) {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+/** Jumlah record + perkiraan ruang yang dipakai origin ini (IndexedDB + cache service worker) */
+function useStorageInfo() {
+  return useLiveQuery(async () => {
+    const counts = await Promise.all([
+      db.transactions.count(),
+      db.categories.count(),
+      db.wallets.count(),
+      db.splitBills.count(),
+      db.notes.count(),
+      db.budgets.count(),
+      db.recurring.count(),
+      db.debts.count(),
+    ])
+    const est = await navigator.storage?.estimate?.().catch(() => undefined)
+    const persisted = await navigator.storage?.persisted?.().catch(() => false)
+    return { records: counts.reduce((a, b) => a + b, 0), usage: est?.usage, persisted: !!persisted }
+  }, [])
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

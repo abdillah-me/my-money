@@ -2,12 +2,19 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { translate, type DictKey, type Lang } from './i18n'
 import { formatMoney, type Currency } from './format'
 
+export type Theme = 'light' | 'dark' | 'system'
+
 export interface Settings {
   name: string
   lang: Lang
   currency: Currency
   onboarded: boolean
   hideBalance: boolean
+  theme: Theme
+  /** Kategori terakhir per tipe, dipilih otomatis di form transaksi */
+  lastCategory: { income?: number; expense?: number }
+  /** Dompet terakhir dipakai */
+  lastWallet?: number
 }
 
 const STORAGE_KEY = 'wahduid.settings'
@@ -18,6 +25,8 @@ const defaults: Settings = {
   currency: 'IDR',
   onboarded: false,
   hideBalance: false,
+  theme: 'system',
+  lastCategory: {},
 }
 
 function load(): Settings {
@@ -30,10 +39,21 @@ function load(): Settings {
       ...parsed,
       lang: parsed.lang === 'en' || parsed.lang === 'id' ? parsed.lang : defaults.lang,
       currency: parsed.currency === 'USD' || parsed.currency === 'IDR' ? parsed.currency : defaults.currency,
+      theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
+      lastCategory: parsed.lastCategory && typeof parsed.lastCategory === 'object' ? parsed.lastCategory : {},
     }
   } catch {
     return defaults
   }
+}
+
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
+
+function applyTheme(theme: Theme) {
+  const dark = theme === 'dark' || (theme === 'system' && darkQuery.matches)
+  document.documentElement.classList.toggle('dark', dark)
+  // Warna status bar / title bar mengikuti tema
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0b1210' : '#16a34a')
 }
 
 interface SettingsCtx {
@@ -52,6 +72,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
     document.documentElement.lang = settings.lang
   }, [settings])
+
+  useEffect(() => {
+    applyTheme(settings.theme)
+    if (settings.theme !== 'system') return
+    const onChange = () => applyTheme('system')
+    darkQuery.addEventListener('change', onChange)
+    return () => darkQuery.removeEventListener('change', onChange)
+  }, [settings.theme])
 
   const update = useCallback((patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })), [])
 

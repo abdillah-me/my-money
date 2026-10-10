@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Eye, EyeOff, FileText, PieChart, StickyNote, Users } from 'lucide-react'
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Eye, EyeOff, HandCoins, Repeat, StickyNote, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import BudgetBar from '@/components/BudgetBar'
 import InstallBanner from '@/components/InstallBanner'
@@ -12,8 +12,8 @@ import {
   useBudgetStatus,
   useCategoryMap,
   useCategoryName,
+  useBalances,
   useMonthTransactions,
-  useTotalBalance,
 } from '@/db/hooks'
 import type { DictKey } from '@/lib/i18n'
 import { useMonth } from '@/lib/month'
@@ -28,10 +28,10 @@ function greetingKey(): DictKey {
   return 'greeting.night'
 }
 
-const menus: { to: string; label: DictKey; Icon: typeof FileText }[] = [
-  { to: '/report', label: 'menu.report', Icon: FileText },
-  { to: '/analyze', label: 'menu.analyze', Icon: PieChart },
+const menus: { to: string; label: DictKey; Icon: typeof Users }[] = [
   { to: '/split-bill', label: 'menu.splitBill', Icon: Users },
+  { to: '/debts', label: 'menu.debts', Icon: HandCoins },
+  { to: '/recurring', label: 'menu.recurring', Icon: Repeat },
   { to: '/note', label: 'menu.note', Icon: StickyNote },
 ]
 
@@ -39,7 +39,7 @@ export default function Home() {
   const { settings, update, t, money } = useSettings()
   const { year, month } = useMonth()
   const txs = useMonthTransactions(year, month)
-  const balance = useTotalBalance()
+  const balance = useBalances().total
   const categories = useCategoryMap()
   const { income, expense } = summarize(txs)
   const catName = useCategoryName()
@@ -66,10 +66,7 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="mt-6 flex items-center justify-between text-white">
-          <p className="text-sm opacity-90">{t('common.balance')}</p>
-          <MonthPicker tone="light" />
-        </div>
+        <p className="mt-6 text-sm text-white/90">{t('home.totalBalance')}</p>
         <div className="flex items-center gap-2 text-white">
           <p className="text-3xl font-bold tracking-tight">{mask(money(balance))}</p>
           <Button
@@ -84,7 +81,11 @@ export default function Home() {
           </Button>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3">
+        {/* Pilih bulan diletakkan di atas kartu bulanan agar jelas: hanya kartu & daftar transaksi yang terpengaruh */}
+        <div className="mt-5 flex justify-end">
+          <MonthPicker tone="light" />
+        </div>
+        <div className="mt-1 grid grid-cols-2 gap-3">
           <SummaryCard kind="income" label={t('common.income')} value={mask(money(income))} />
           <SummaryCard kind="expense" label={t('common.expense')} value={mask(money(expense))} />
         </div>
@@ -171,7 +172,7 @@ function SummaryCard({ kind, label, value }: { kind: 'income' | 'expense'; label
       <span
         className={cn(
           'grid size-9 place-items-center rounded-full',
-          kind === 'income' ? 'bg-secondary text-income' : 'bg-red-50 text-expense',
+          kind === 'income' ? 'bg-secondary text-income' : 'bg-red-50 text-expense dark:bg-red-950',
         )}
         aria-hidden
       >

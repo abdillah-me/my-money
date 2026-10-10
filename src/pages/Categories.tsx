@@ -9,7 +9,7 @@ import Segmented from '@/components/Segmented'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { db, type Category, type TxType } from '@/db/db'
+import { db, type Category, type CategoryType as TxType } from '@/db/db'
 import { useCategories, useCategoryName } from '@/db/hooks'
 import { useSettings } from '@/lib/settings'
 

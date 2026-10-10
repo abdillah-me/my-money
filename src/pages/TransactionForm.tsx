@@ -1,23 +1,33 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, Plus, Repeat, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import CategoryDialog from '@/components/CategoryDialog'
 import CategoryIcon from '@/components/CategoryIcon'
 import { useConfirm } from '@/components/confirm'
+import DateField from '@/components/DateField'
 import MoneyInput from '@/components/MoneyInput'
 import PageHeader from '@/components/PageHeader'
 import Segmented from '@/components/Segmented'
+import WalletSelect from '@/components/WalletSelect'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { db, type TxType } from '@/db/db'
-import { useCategories, useCategoryName } from '@/db/hooks'
-import { fromInputs, toDateInput, toTimeInput } from '@/lib/format'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { compact, compactPatch, db, type Frequency, type TxType } from '@/db/db'
+import { useCategories, useCategoryName, useWallets } from '@/db/hooks'
+import { fractionDigits, formatCompact, toTimeInput } from '@/lib/format'
 import { useGoBack } from '@/lib/nav'
 import { useSettings } from '@/lib/settings'
 import { cn } from '@/lib/utils'
+
+type Repeat = 'none' | Frequency
+
+/** Nominal cepat dalam satuan mata uang aktif */
+const QUICK_AMOUNTS = { IDR: [10_000, 20_000, 50_000, 100_000], USD: [5, 10, 20, 50] } as const
+
+const parseType = (v: string | null): TxType => (v === 'income' || v === 'transfer' ? v : 'expense')
 
 export default function TransactionForm() {
   const { id } = useParams()
@@ -25,18 +35,23 @@ export default function TransactionForm() {
   const [params] = useSearchParams()
   const goBack = useGoBack()
   const confirm = useConfirm()
-  const { settings, t } = useSettings()
+  const { settings, update, t } = useSettings()
   const categories = useCategories()
+  const wallets = useWallets()
   const catName = useCategoryName()
 
-  const now = Date.now()
-  const [type, setType] = useState<TxType>(params.get('type') === 'income' ? 'income' : 'expense')
+  const [type, setType] = useState<TxType>(parseType(params.get('type')))
   const [amount, setAmount] = useState(0)
-  const [categoryId, setCategoryId] = useState<number | undefined>()
-  const [date, setDate] = useState(toDateInput(now))
-  const [time, setTime] = useState(toTimeInput(now))
+  const [categoryId, setCategoryId] = useState<number | undefined>(
+    type === 'transfer' ? undefined : settings.lastCategory[type],
+  )
+  const [walletId, setWalletId] = useState<number | undefined>(settings.lastWallet)
+  const [toWalletId, setToWalletId] = useState<number | undefined>()
+  const [date, setDate] = useState(Date.now())
   const [note, setNote] = useState('')
-  const [errors, setErrors] = useState<{ amount?: string; category?: string }>({})
+  const [repeat, setRepeat] = useState<Repeat>('none')
+  const [recurringId, setRecurringId] = useState<number | undefined>()
+  const [errors, setErrors] = useState<{ amount?: string; category?: string; wallet?: string }>({})
   const [loaded, setLoaded] = useState(editId === undefined)
   const [notFound, setNotFound] = useState(false)
   const [catDialog, setCatDialog] = useState(false)
@@ -49,32 +64,79 @@ export default function TransactionForm() {
       if (!tx) return setNotFound(true)
       setType(tx.type)
       setAmount(tx.amount)
-      setCategoryId(tx.categoryId)
-      setDate(toDateInput(tx.date))
-      setTime(toTimeInput(tx.date))
-      setNote(tx.note)
+      setCategoryId(tx.type === 'transfer' ? undefined : tx.categoryId)
+      setWalletId(tx.walletId)
+      setToWalletId(tx.toWalletId)
+      setDate(tx.date)
+      setNote(tx.note ?? '')
+      setRecurringId(tx.recurringId)
       setLoaded(true)
     })
   }, [editId])
 
+  // Dompet default: terakhir dipakai bila masih aktif, selain itu dompet aktif pertama
+  useEffect(() => {
+    if (!wallets.length) return
+    const active = wallets.filter((w) => !w.archived)
+    if (walletId === undefined || !wallets.some((w) => w.id === walletId)) setWalletId(active[0]?.id)
+  }, [wallets, walletId])
+
   const options = useMemo(() => categories.filter((c) => c.type === type), [categories, type])
+  const isTransfer = type === 'transfer'
 
   const switchType = (next: TxType) => {
     setType(next)
-    if (categories.find((c) => c.id === categoryId)?.type !== next) setCategoryId(undefined)
+    setErrors({})
+    if (next === 'transfer') return setCategoryId(undefined)
+    if (categories.find((c) => c.id === categoryId)?.type !== next) setCategoryId(settings.lastCategory[next])
+  }
+
+  const setTime = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number)
+    const d = new Date(date)
+    d.setHours(h || 0, m || 0, 0, 0)
+    setDate(d.getTime())
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     const errs: typeof errors = {}
     if (amount <= 0) errs.amount = t('tx.amountError')
-    if (categoryId === undefined) errs.category = t('tx.categoryError')
+    if (!isTransfer && categoryId === undefined) errs.category = t('tx.categoryError')
+    if (walletId === undefined) errs.wallet = t('wallet.required')
+    if (isTransfer && (toWalletId === undefined || toWalletId === walletId)) errs.wallet = t('wallet.transferError')
     setErrors(errs)
     if (Object.keys(errs).length) return
 
-    const data = { type, amount, categoryId: categoryId!, date: fromInputs(date, time), note: note.trim() }
-    if (editId !== undefined) await db.transactions.update(editId, data)
-    else await db.transactions.add({ ...data, createdAt: Date.now() })
+    const base = {
+      type,
+      amount,
+      categoryId: isTransfer ? 0 : categoryId!,
+      walletId: walletId!,
+      toWalletId: isTransfer ? toWalletId : undefined,
+      date,
+      note: note.trim(),
+    }
+
+    if (editId !== undefined) {
+      await db.transactions.update(editId, compactPatch(base))
+    } else {
+      await db.transaction('rw', db.transactions, db.recurring, async () => {
+        let rid: number | undefined
+        if (repeat !== 'none' && !isTransfer) {
+          // Transaksi ini = kejadian ke-0, jadi aturan mulai dari kejadian ke-1
+          rid = (await db.recurring.add(
+            compact({ type, amount, categoryId: categoryId!, walletId: walletId!, note: base.note, freq: repeat, start: date, n: 1 }, ['amount', 'categoryId', 'n']),
+          )) as number
+        }
+        await db.transactions.add(compact({ ...base, recurringId: rid }, ['amount', 'categoryId']))
+      })
+    }
+
+    update({
+      lastWallet: walletId,
+      ...(isTransfer ? {} : { lastCategory: { ...settings.lastCategory, [type]: categoryId } }),
+    })
     toast.success(t('tx.saved'))
     goBack()
   }
@@ -88,6 +150,7 @@ export default function TransactionForm() {
   }
 
   const title = editId !== undefined ? t('tx.edit') : t('tx.add')
+  const typeColor = type === 'income' ? 'bg-income' : type === 'expense' ? 'bg-expense' : 'bg-primary'
 
   if (notFound) {
     return (
@@ -114,16 +177,18 @@ export default function TransactionForm() {
       {loaded && (
         <form onSubmit={submit} className="space-y-5 px-5 pb-10" noValidate>
           <Segmented<TxType>
-            label={t('tx.category')}
+            label={t('tx.type')}
             value={type}
             onValueChange={switchType}
             options={[
+              // Kelas ditulis utuh (bukan string dinamis) agar terdeteksi oleh Tailwind
               { value: 'expense', label: t('common.expense'), activeClassName: 'data-[state=on]:bg-expense data-[state=on]:text-white' },
               { value: 'income', label: t('common.income'), activeClassName: 'data-[state=on]:bg-income data-[state=on]:text-white' },
+              { value: 'transfer', label: t('wallet.transfer'), activeClassName: 'data-[state=on]:bg-primary data-[state=on]:text-white' },
             ]}
           />
 
-          <Card className="gap-1 rounded-3xl px-5 shadow-card ring-0">
+          <Card className="gap-2 rounded-3xl px-5 shadow-card ring-0">
             <Label htmlFor="tx-amount" className="font-normal text-muted-foreground">
               {t('tx.amount')}
             </Label>
@@ -150,70 +215,133 @@ export default function TransactionForm() {
                 {errors.amount}
               </p>
             )}
+            {/* Nominal cepat: menambah ke nominal saat ini */}
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_AMOUNTS[settings.currency].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => {
+                    const decimals = fractionDigits(settings.currency)
+                    setAmount((a) => Math.round((a + q) * 10 ** decimals) / 10 ** decimals)
+                    setErrors((e) => ({ ...e, amount: undefined }))
+                  }}
+                  className="h-8 rounded-full bg-muted px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground"
+                >
+                  +{formatCompact(q, settings.lang)}
+                </button>
+              ))}
+            </div>
           </Card>
 
-          <fieldset>
-            <legend className="mb-2 text-sm font-medium">{t('tx.category')}</legend>
-            <div className="grid grid-cols-4 gap-2">
-              {options.map((c) => {
-                const active = c.id === categoryId
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => {
-                      setCategoryId(c.id)
-                      setErrors((e) => ({ ...e, category: undefined }))
-                    }}
-                    className={cn(
-                      'flex flex-col items-center gap-1 rounded-2xl border-2 bg-card px-1 py-2.5 text-[11px] transition-colors',
-                      active ? 'border-primary bg-accent' : 'border-transparent hover:bg-accent',
-                    )}
-                  >
-                    <CategoryIcon category={c} className="size-9 text-lg" />
-                    <span className="w-full truncate text-center">{catName(c)}</span>
-                  </button>
-                )
-              })}
-              <button
-                type="button"
-                onClick={() => setCatDialog(true)}
-                className="flex flex-col items-center gap-1 rounded-2xl border-2 border-dashed border-primary/40 px-1 py-2.5 text-[11px] font-medium text-primary transition-colors hover:bg-accent"
-              >
-                <span className="grid size-9 place-items-center rounded-full bg-secondary" aria-hidden>
-                  <Plus className="size-5" />
-                </span>
-                <span>{t('cat.newShort')}</span>
-                <span className="sr-only">{t('cat.add')}</span>
-              </button>
+          {/* Dompet */}
+          {isTransfer ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="tx-wallet">{t('wallet.from')}</Label>
+              <WalletSelect id="tx-wallet" value={walletId} onChange={setWalletId} invalid={!!errors.wallet} />
+              <div className="flex justify-center py-1 text-muted-foreground" aria-hidden>
+                <ArrowDown className="size-4" />
+              </div>
+              <Label htmlFor="tx-to-wallet">{t('wallet.to')}</Label>
+              <WalletSelect
+                id="tx-to-wallet"
+                value={toWalletId}
+                onChange={setToWalletId}
+                exclude={walletId}
+                placeholder={t('wallet.choose')}
+                invalid={!!errors.wallet}
+              />
             </div>
-            {errors.category && <p className="mt-1 text-xs text-destructive">{errors.category}</p>}
-          </fieldset>
+          ) : (
+            <div className="space-y-1.5">
+              <Label htmlFor="tx-wallet">{t('wallet.title')}</Label>
+              <WalletSelect id="tx-wallet" value={walletId} onChange={setWalletId} invalid={!!errors.wallet} />
+            </div>
+          )}
+          {errors.wallet && <p className="-mt-3 text-xs text-destructive">{errors.wallet}</p>}
 
-          <div className="grid grid-cols-2 gap-3">
+          {!isTransfer && (
+            <fieldset>
+              <legend className="mb-2 text-sm font-medium">{t('tx.category')}</legend>
+              <div className="grid grid-cols-4 gap-2">
+                {options.map((c) => {
+                  const active = c.id === categoryId
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => {
+                        setCategoryId(c.id)
+                        setErrors((e) => ({ ...e, category: undefined }))
+                      }}
+                      className={cn(
+                        'flex flex-col items-center gap-1 rounded-2xl border-2 bg-card px-1 py-2.5 text-[11px] transition-colors',
+                        active ? 'border-primary bg-accent' : 'border-transparent hover:bg-accent',
+                      )}
+                    >
+                      <CategoryIcon category={c} className="size-9 text-lg" />
+                      <span className="w-full truncate text-center">{catName(c)}</span>
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => setCatDialog(true)}
+                  className="flex flex-col items-center gap-1 rounded-2xl border-2 border-dashed border-primary/40 px-1 py-2.5 text-[11px] font-medium text-primary transition-colors hover:bg-accent"
+                >
+                  <span className="grid size-9 place-items-center rounded-full bg-secondary" aria-hidden>
+                    <Plus className="size-5" />
+                  </span>
+                  <span>{t('cat.newShort')}</span>
+                  <span className="sr-only">{t('cat.add')}</span>
+                </button>
+              </div>
+              {errors.category && <p className="mt-1 text-xs text-destructive">{errors.category}</p>}
+            </fieldset>
+          )}
+
+          <div className="grid grid-cols-[1fr_7rem] gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="tx-date">{t('tx.date')}</Label>
-              <Input id="tx-date" type="date" value={date} required onChange={(e) => e.target.value && setDate(e.target.value)} />
+              <DateField id="tx-date" value={date} onChange={setDate} quick />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="tx-time">{t('tx.time')}</Label>
-              <Input id="tx-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+              <Input id="tx-time" type="time" value={toTimeInput(date)} onChange={(e) => setTime(e.target.value)} />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="tx-note">{t('tx.note')}</Label>
-            <Input
-              id="tx-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={100}
-              placeholder={t('tx.notePlaceholder')}
-            />
+            <Input id="tx-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={100} placeholder={t('tx.notePlaceholder')} />
           </div>
 
-          <Button type="submit" size="lg" className="w-full">
+          {/* Ulangi hanya saat membuat transaksi baru (bukan transfer) */}
+          {editId === undefined && !isTransfer && (
+            <div className="space-y-1.5">
+              <Label htmlFor="tx-repeat" className="flex items-center gap-1.5">
+                <Repeat className="size-4 text-primary" aria-hidden />
+                {t('recurring.repeat')}
+              </Label>
+              <Select value={repeat} onValueChange={(v) => setRepeat(v as Repeat)}>
+                <SelectTrigger id="tx-repeat" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="none">{t('recurring.none')}</SelectItem>
+                  {(['daily', 'weekly', 'monthly', 'yearly'] as const).map((f) => (
+                    <SelectItem key={f} value={f}>
+                      {t(`recurring.${f}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {recurringId !== undefined && <p className="text-xs text-muted-foreground">{t('recurring.fromRule')}</p>}
+
+          <Button type="submit" size="lg" className={cn('w-full', typeColor, 'hover:opacity-90')}>
             {t('common.save')}
           </Button>
         </form>
@@ -222,7 +350,7 @@ export default function TransactionForm() {
       <CategoryDialog
         open={catDialog}
         onOpenChange={setCatDialog}
-        defaultType={type}
+        defaultType={isTransfer ? 'expense' : type}
         lockType
         onSaved={(newId) => {
           setCategoryId(newId)

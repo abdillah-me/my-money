@@ -136,6 +136,10 @@
 .hero-gradient {
   background: linear-gradient(180deg, #16a34a 0%, #22c55e 45%, #bbf7d0 80%, var(--background) 100%);
 }
+/* Mode gelap: gradasi lebih redup tanpa pita hijau muda */
+.dark .hero-gradient {
+  background: linear-gradient(180deg, #15803d 0%, #166534 50%, #0f2a1c 80%, var(--background) 100%);
+}
 
 .no-scrollbar {
   scrollbar-width: none;

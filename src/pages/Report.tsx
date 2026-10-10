@@ -5,7 +5,7 @@ import MonthPicker from '@/components/MonthPicker'
 import PageHeader from '@/components/PageHeader'
 import Segmented from '@/components/Segmented'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { TxType } from '@/db/db'
+import type { CategoryType as TxType } from '@/db/db'
 import { summarize, useCategoryMap, useCategoryName, useMonthTransactions } from '@/db/hooks'
 import { formatCompact } from '@/lib/format'
 import { useMonth } from '@/lib/month'
@@ -51,7 +51,7 @@ export default function Report() {
 
   return (
     <>
-      <PageHeader title={t('report.title')} />
+      <PageHeader title={t('report.title')} fallback="/analyze" />
       <div className="space-y-4 px-5">
         <div className="flex justify-center">
           <MonthPicker />

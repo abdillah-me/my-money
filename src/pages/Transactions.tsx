@@ -7,7 +7,7 @@ import TransactionItem from '@/components/TransactionItem'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Transaction, TxType } from '@/db/db'
+import type { CategoryType as TxType, Transaction } from '@/db/db'
 import { summarize, useCategories, useCategoryMap, useCategoryName, useMonthTransactions } from '@/db/hooks'
 import { formatDate } from '@/lib/format'
 import { useMonth } from '@/lib/month'
@@ -33,7 +33,7 @@ export default function Transactions() {
       if (type !== 'all' && tx.type !== type) return false
       if (categoryId !== 'all' && tx.categoryId !== Number(categoryId)) return false
       if (!q) return true
-      return tx.note.toLowerCase().includes(q) || catName(categoryMap.get(tx.categoryId)).toLowerCase().includes(q)
+      return (tx.note ?? '').toLowerCase().includes(q) || catName(categoryMap.get(tx.categoryId)).toLowerCase().includes(q)
     })
   }, [txs, query, type, categoryId, categoryMap, catName])
 
